@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, readFileSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync, rmSync, statSync } from "node:fs";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -9,6 +9,7 @@ vi.mock("node:fs", () => ({
   copyFileSync: vi.fn(),
   existsSync: vi.fn(),
   readFileSync: vi.fn(),
+  rmSync: vi.fn(),
   statSync: vi.fn(),
 }));
 
@@ -22,6 +23,7 @@ const ORIGINAL_HOME = process.env.HOME;
 const existsSyncMock = vi.mocked(existsSync);
 const copyFileSyncMock = vi.mocked(copyFileSync);
 const readFileSyncMock = vi.mocked(readFileSync);
+const rmSyncMock = vi.mocked(rmSync);
 const statSyncMock = vi.mocked(statSync);
 const spawnSyncMock = vi.mocked(spawnSync);
 
@@ -83,6 +85,37 @@ describe("browser cookie import", () => {
       source: "chrome:Profile 1",
     });
     expect(copyFileSyncMock).toHaveBeenCalled();
+    expect(rmSyncMock).toHaveBeenCalled();
+  });
+
+  it("imports session cookie format from Chrome sqlite cookies", async () => {
+    setPlatform("darwin");
+    process.env.HOME = "/Users/mock";
+
+    existsSyncMock.mockImplementation((path) => String(path).endsWith("/Default/Cookies"));
+    copyFileSyncMock.mockImplementation(() => undefined);
+    spawnSyncMock.mockImplementation((command) => {
+      if (command === "mkdir") {
+        return { status: 0, stdout: "", stderr: "" } as never;
+      }
+      if (command === "sqlite3") {
+        return {
+          status: 0,
+          stdout: "session_id\tsid-1\t\nauth_token\tat-1\t\nrefresh_token\trt-1\t\n",
+          stderr: "",
+        } as never;
+      }
+
+      return { status: 1, stdout: "", stderr: "unsupported" } as never;
+    });
+
+    const imported = await importCookieFromBrowser("chrome");
+
+    expect(imported).toMatchObject({
+      cookie: "session_id=sid-1; auth_token=at-1; refresh_token=rt-1",
+      source: "chrome:Default",
+    });
+    expect(rmSyncMock).toHaveBeenCalled();
   });
 
   it("returns actionable error when Safari import cannot locate cookies", async () => {
@@ -121,5 +154,27 @@ describe("browser cookie import", () => {
 
     expect(readFileSyncMock).not.toHaveBeenCalled();
     expect(statSyncMock).not.toHaveBeenCalled();
+  });
+
+  it("imports session cookie format from Safari sqlite cookies", async () => {
+    setPlatform("darwin");
+    process.env.HOME = "/Users/mock";
+
+    existsSyncMock.mockImplementation((path) => String(path).endsWith("Cookies.sqlite"));
+    spawnSyncMock.mockImplementation((command) => {
+      if (command === "sqlite3") {
+        return {
+          status: 0,
+          stdout: "session_id\tsid-2\t.byr.pt\nauth_token\tat-2\t.byr.pt\n",
+          stderr: "",
+        } as never;
+      }
+      return { status: 1, stdout: "", stderr: "unsupported" } as never;
+    });
+
+    const imported = await importCookieFromBrowser("safari");
+
+    expect(imported.cookie).toBe("session_id=sid-2; auth_token=at-2");
+    expect(imported.source).toContain("safari-sqlite");
   });
 });

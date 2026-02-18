@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, readFileSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pbkdf2Sync, createDecipheriv } from "node:crypto";
@@ -19,6 +19,7 @@ interface CookieRecord {
 }
 
 const TARGET_DOMAINS = new Set([".byr.pt", "byr.pt", ".bt.byr.cn", "bt.byr.cn"]);
+const AUTH_COOKIE_NAMES = new Set(["uid", "pass", "session_id", "auth_token", "refresh_token"]);
 
 export async function importCookieFromBrowser(
   browser: "chrome" | "safari",
@@ -71,68 +72,64 @@ function importCookieFromChrome(profile?: string): BrowserCookieImportResult {
     copyFileSync(shm, `${tempDb}-shm`);
   }
 
-  const query =
-    "SELECT name, value, hex(encrypted_value) FROM cookies " +
-    "WHERE host_key IN ('.byr.pt','byr.pt','.bt.byr.cn','bt.byr.cn') AND name IN ('uid','pass')";
+  try {
+    const query =
+      "SELECT name, value, hex(encrypted_value) FROM cookies " +
+      "WHERE host_key IN ('.byr.pt','byr.pt','.bt.byr.cn','bt.byr.cn') " +
+      "AND name IN ('uid','pass','session_id','auth_token','refresh_token')";
 
-  const sqlite = spawnSync("sqlite3", ["-separator", "\t", tempDb, query], {
-    encoding: "utf8",
-  });
-  if (sqlite.status !== 0) {
-    throw new CliAppError({
-      code: "E_AUTH_REQUIRED",
-      message: "Failed to read Chrome cookies with sqlite3",
-      details: {
-        stderr: sqlite.stderr?.trim(),
-      },
+    const sqlite = spawnSync("sqlite3", ["-separator", "\t", tempDb, query], {
+      encoding: "utf8",
     });
-  }
+    if (sqlite.status !== 0) {
+      throw new CliAppError({
+        code: "E_AUTH_REQUIRED",
+        message: "Failed to read Chrome cookies with sqlite3",
+        details: {
+          stderr: sqlite.stderr?.trim(),
+        },
+      });
+    }
 
-  const decrypted = new Map<string, string>();
-  const lines = (sqlite.stdout ?? "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+    const cookies = new Map<string, string>();
+    const lines = (sqlite.stdout ?? "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
 
-  let keyHex: string | undefined;
+    let keyHex: string | undefined;
 
-  for (const line of lines) {
-    const [name, value, encryptedHex] = line.split("\t");
-    if (name !== "uid" && name !== "pass") {
-      continue;
+    for (const line of lines) {
+      const [name, value, encryptedHex] = line.split("\t");
+      if (!AUTH_COOKIE_NAMES.has(name)) {
+        continue;
+      }
+      if (value && value.length > 0) {
+        cookies.set(name, value);
+        continue;
+      }
+      if (!keyHex) {
+        keyHex = getChromeSafeStorageKeyHex();
+      }
+      if (!encryptedHex || encryptedHex.length === 0 || !keyHex) {
+        continue;
+      }
+      const resolved = decryptChromeCookieHex(encryptedHex, keyHex);
+      if (resolved) {
+        cookies.set(name, resolved);
+      }
     }
-    if (value && value.length > 0) {
-      decrypted.set(name, value);
-      continue;
-    }
-    if (!keyHex) {
-      keyHex = getChromeSafeStorageKeyHex();
-    }
-    if (!encryptedHex || encryptedHex.length === 0 || !keyHex) {
-      continue;
-    }
-    const resolved = decryptChromeCookieHex(encryptedHex, keyHex);
-    if (resolved) {
-      decrypted.set(name, resolved);
-    }
-  }
 
-  const uid = decrypted.get("uid");
-  const pass = decrypted.get("pass");
-  if (!uid || !pass) {
-    throw new CliAppError({
-      code: "E_AUTH_REQUIRED",
-      message: "Unable to extract uid/pass from Chrome cookies",
-      details: {
+    return {
+      cookie: buildByrAuthCookieHeader(cookies, {
+        source: `chrome:${profileName}`,
         profile: profileName,
-      },
-    });
+      }),
+      source: `chrome:${profileName}`,
+    };
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
   }
-
-  return {
-    cookie: `uid=${uid}; pass=${pass}`,
-    source: `chrome:${profileName}`,
-  };
 }
 
 function getChromeSafeStorageKeyHex(): string | undefined {
@@ -249,7 +246,8 @@ function importCookieFromSafari(): BrowserCookieImportResult {
 function tryReadSafariSqlite(path: string): BrowserCookieImportResult | undefined {
   const query =
     "SELECT name, value, host FROM cookies " +
-    "WHERE host IN ('.byr.pt','byr.pt','.bt.byr.cn','bt.byr.cn') AND name IN ('uid','pass')";
+    "WHERE host IN ('.byr.pt','byr.pt','.bt.byr.cn','bt.byr.cn') " +
+    "AND name IN ('uid','pass','session_id','auth_token','refresh_token')";
   const sqlite = spawnSync("sqlite3", ["-separator", "\t", path, query], {
     encoding: "utf8",
   });
@@ -298,21 +296,56 @@ function extractByrCookie(
     if (!TARGET_DOMAINS.has(record.domain)) {
       continue;
     }
-    if (record.name === "uid" || record.name === "pass") {
+    if (AUTH_COOKIE_NAMES.has(record.name)) {
       map.set(record.name, record.value);
     }
   }
 
-  const uid = map.get("uid");
-  const pass = map.get("pass");
-  if (!uid || !pass) {
+  if (map.size === 0) {
     return undefined;
   }
 
-  return {
-    cookie: `uid=${uid}; pass=${pass}`,
-    source,
-  };
+  try {
+    return {
+      cookie: buildByrAuthCookieHeader(map, { source }),
+      source,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function buildByrAuthCookieHeader(
+  cookieMap: Map<string, string>,
+  context: { source: string; profile?: string },
+): string {
+  const uid = cookieMap.get("uid");
+  const pass = cookieMap.get("pass");
+  if (uid && pass) {
+    return `uid=${uid}; pass=${pass}`;
+  }
+
+  const sessionId = cookieMap.get("session_id");
+  const authToken = cookieMap.get("auth_token");
+  if (sessionId && authToken) {
+    const refreshToken = cookieMap.get("refresh_token");
+    return refreshToken
+      ? `session_id=${sessionId}; auth_token=${authToken}; refresh_token=${refreshToken}`
+      : `session_id=${sessionId}; auth_token=${authToken}`;
+  }
+
+  throw new CliAppError({
+    code: "E_AUTH_REQUIRED",
+    message: "Unable to extract BYR auth cookies from browser storage",
+    details: {
+      source: context.source,
+      profile: context.profile,
+      requiredAnyOf: [
+        ["uid", "pass"],
+        ["session_id", "auth_token"],
+      ],
+    },
+  });
 }
 
 function parseBinaryCookies(buffer: Buffer): CookieRecord[] {

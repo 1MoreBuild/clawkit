@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
@@ -81,9 +81,29 @@ export async function writeAuthStore(cookie: string, source: string): Promise<By
 }
 
 export async function clearAuthStore(): Promise<boolean> {
+  const authStorePath = getByrAuthStorePath();
+  let existed = true;
   try {
-    await rm(getByrAuthStorePath(), { force: true });
-    return true;
+    await stat(authStorePath);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === "ENOENT") {
+      existed = false;
+    } else {
+      throw new CliAppError({
+        code: "E_AUTH_INVALID",
+        message: "Failed to inspect BYR auth store",
+        details: {
+          reason: nodeError.message,
+        },
+        cause: error,
+      });
+    }
+  }
+
+  try {
+    await rm(authStorePath, { force: true });
+    return existed;
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
     throw new CliAppError({

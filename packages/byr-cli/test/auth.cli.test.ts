@@ -127,6 +127,20 @@ describe("auth command flow", () => {
         source: "none",
       },
     });
+
+    stdout.chunks = [];
+    const logoutAgainCode = await runCli(["auth", "logout", "--json"], {
+      stdout,
+      stderr,
+    });
+
+    expect(logoutAgainCode).toBe(0);
+    expect(JSON.parse(stdout.read())).toMatchObject({
+      ok: true,
+      data: {
+        deleted: false,
+      },
+    });
   });
 
   it("supports online verification in auth status", async () => {
