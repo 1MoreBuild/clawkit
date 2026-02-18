@@ -124,15 +124,21 @@ function parseTagAttributes(raw: string): Record<string, string> {
 
 export function looksLikeLoginPage(html: string): boolean {
   const lower = html.toLowerCase();
-  if (!lower.includes("password")) {
+  if (lower.includes("logout.php")) {
     return false;
   }
 
-  if (lower.includes("takelogin.php") || lower.includes("login.php")) {
+  const hasPasswordInput = /<input\b[^>]*\btype\s*=\s*["']?password\b/i.test(html);
+  const hasLoginAction =
+    /<form\b[^>]*\baction\s*=\s*["'][^"']*(?:takelogin\.php|login(?:\.php)?)[^"']*["']/i.test(
+      html,
+    ) || lower.includes("takelogin.php");
+
+  if (hasPasswordInput && hasLoginAction) {
     return true;
   }
 
-  return /登录|signin|sign in|not authorized|auth_form/.test(lower);
+  return /auth_form|not authorized|please\s*log\s*in|请先登录|請先登錄|未登录|未登入/.test(lower);
 }
 
 export function looksLikeNotFoundPage(html: string): boolean {
@@ -515,25 +521,64 @@ export function parseUserInfoFromDetails(
 > {
   const labelValues = parseLabelValuePairs(html);
 
+  const normalizedHtml = normalizeText(html);
   const transferText =
-    pickLabelValue(labelValues, ["传输", "傳送", "transfers", "分享率"]) ?? normalizeText(html);
+    pickLabelValue(labelValues, ["传输", "傳送", "transfers", "分享率"]) ?? normalizedHtml;
 
-  const uploadedBytes = parseTransferValue(
+  const uploadedFromTransfer = parseTransferValue(
     transferText,
     /(上[传傳]量|uploaded).+?([\d.]+ ?[ZEPTGMK]?i?B)/i,
   );
-  const trueUploadedBytes = parseTransferValue(
+  const trueUploadedFromTransfer = parseTransferValue(
     transferText,
     /((?:实际|真实)上传量|(?:實際|真實)上傳量|(?:real|actual) uploaded).+?([\d.]+ ?[ZEPTGMK]?i?B)/i,
   );
-  const downloadedBytes = parseTransferValue(
+  const downloadedFromTransfer = parseTransferValue(
     transferText,
     /(下[载載]量|downloaded).+?([\d.]+ ?[ZEPTGMK]?i?B)/i,
   );
-  const trueDownloadedBytes = parseTransferValue(
+  const trueDownloadedFromTransfer = parseTransferValue(
     transferText,
     /((?:实际|真实)下载量|(?:實際|真實)下載量|(?:real|actual) downloaded).+?([\d.]+ ?[ZEPTGMK]?i?B)/i,
   );
+
+  const uploadedFromPage = parseTransferValue(
+    normalizedHtml,
+    /(上[传傳]量|uploaded).+?([\d.]+ ?[ZEPTGMK]?i?B)/i,
+  );
+  const trueUploadedFromPage = parseTransferValue(
+    normalizedHtml,
+    /((?:实际|真实)上传量|(?:實際|真實)上傳量|(?:real|actual) uploaded).+?([\d.]+ ?[ZEPTGMK]?i?B)/i,
+  );
+  const downloadedFromPage = parseTransferValue(
+    normalizedHtml,
+    /(下[载載]量|downloaded).+?([\d.]+ ?[ZEPTGMK]?i?B)/i,
+  );
+  const trueDownloadedFromPage = parseTransferValue(
+    normalizedHtml,
+    /((?:实际|真实)下载量|(?:實際|真實)下載量|(?:real|actual) downloaded).+?([\d.]+ ?[ZEPTGMK]?i?B)/i,
+  );
+
+  const uploadedBytes =
+    uploadedFromTransfer > 0 ? uploadedFromTransfer : uploadedFromPage > 0 ? uploadedFromPage : 0;
+  const trueUploadedBytes =
+    trueUploadedFromTransfer > 0
+      ? trueUploadedFromTransfer
+      : trueUploadedFromPage > 0
+        ? trueUploadedFromPage
+        : 0;
+  const downloadedBytes =
+    downloadedFromTransfer > 0
+      ? downloadedFromTransfer
+      : downloadedFromPage > 0
+        ? downloadedFromPage
+        : 0;
+  const trueDownloadedBytes =
+    trueDownloadedFromTransfer > 0
+      ? trueDownloadedFromTransfer
+      : trueDownloadedFromPage > 0
+        ? trueDownloadedFromPage
+        : 0;
 
   const id = parseUserIdFromIndex(html) ?? fallbackId;
   const name =
@@ -577,8 +622,8 @@ export function parseUserInfoFromDetails(
     messageCount,
     uploadedBytes,
     downloadedBytes,
-    trueUploadedBytes,
-    trueDownloadedBytes,
+    trueUploadedBytes: trueUploaded,
+    trueDownloadedBytes: trueDownloaded,
     ratio,
     levelName,
     bonus,
@@ -670,16 +715,38 @@ function extractHnrSnippet(html: string): string {
 }
 
 function inferUserName(html: string): string | undefined {
-  const match = /userdetails\.php\?[^"']*id=\d+[^"']*["'][^>]*>([^<]+)</i.exec(html);
-  if (match === null) {
-    return undefined;
+  const patterns = [
+    /<h1\b[^>]*>[\s\S]*?<a\b[^>]*href\s*=\s*["'][^"']*userdetails\.php\?[^"']*id=\d+[^"']*["'][^>]*>([\s\S]*?)<\/a>[\s\S]*?<\/h1>/i,
+    /userdetails\.php\?[^"']*id=\d+[^"']*["'][^>]*>([\s\S]*?)<\/a>/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = pattern.exec(html);
+    if (match === null) {
+      continue;
+    }
+
+    const text = normalizeText(match[1] ?? "");
+    if (text.length > 0) {
+      return text;
+    }
   }
 
-  const text = normalizeText(match[1]);
-  return text.length > 0 ? text : undefined;
+  return undefined;
 }
 
 function inferLevelName(html: string): string | undefined {
+  const levelRowImage =
+    /<td\b[^>]*class\s*=\s*["'][^"']*\browhead\b[^"']*["'][^>]*>(?:[\s\S]*?)(?:等级|等級|class)(?:[\s\S]*?)<\/td>\s*<td\b[^>]*class\s*=\s*["'][^"']*\browfollow\b[^"']*["'][^>]*>[\s\S]{0,400}?<img[^>]*title\s*=\s*["']([^"']+)["']/i.exec(
+      html,
+    );
+  if (levelRowImage !== null) {
+    const text = normalizeText(levelRowImage[1] ?? "");
+    if (text.length > 0) {
+      return text;
+    }
+  }
+
   const imageTitle = /(?:等级|等級|class)[\s\S]{0,200}?<img[^>]*title\s*=\s*["']([^"']+)["']/i.exec(
     html,
   );
@@ -883,6 +950,45 @@ function extractPublishedTime(value: string): string | undefined {
 function parseLabelValuePairs(html: string): Map<string, string> {
   const pairs = new Map<string, string>();
   const rows = Array.from(html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi));
+
+  for (const rowMatch of rows) {
+    const rowHtml = rowMatch[0] ?? "";
+    const labelCell =
+      /<td\b[^>]*class\s*=\s*["'][^"']*\browhead\b[^"']*["'][^>]*>([\s\S]*?)<\/td>/i.exec(
+        rowHtml,
+      ) ??
+      /<th\b[^>]*class\s*=\s*["'][^"']*\browhead\b[^"']*["'][^>]*>([\s\S]*?)<\/th>/i.exec(rowHtml);
+    const valueCell =
+      /<td\b[^>]*class\s*=\s*["'][^"']*\browfollow\b[^"']*["'][^>]*>([\s\S]*?)<\/td>/i.exec(
+        rowHtml,
+      ) ??
+      /<th\b[^>]*class\s*=\s*["'][^"']*\browfollow\b[^"']*["'][^>]*>([\s\S]*?)<\/th>/i.exec(
+        rowHtml,
+      );
+    if (labelCell === null || valueCell === null) {
+      continue;
+    }
+
+    const label = normalizeLabel(labelCell[1] ?? "");
+    if (label.length === 0 || pairs.has(label)) {
+      continue;
+    }
+
+    const valueHtml = valueCell[1] ?? "";
+    let value = normalizeText(valueHtml);
+    if (value.length === 0) {
+      const imageTitle = /<img[^>]*(?:title|alt)\s*=\s*["']([^"']+)["']/i.exec(valueHtml);
+      value = normalizeText(imageTitle?.[1] ?? "");
+    }
+
+    if (value.length > 0) {
+      pairs.set(label, value);
+    }
+  }
+
+  if (pairs.size > 0) {
+    return pairs;
+  }
 
   for (const rowMatch of rows) {
     const cells = extractTableCells(rowMatch[0] ?? "");

@@ -10,6 +10,24 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 - (no unreleased entries yet)
 
+## [0.1.9] - 2026-02-18
+
+### Fixed
+
+- Reduced BYR auth false positives by checking final response URL for login redirects (`/login`, `/login.php`) in addition to page content.
+- Improved NexusPHP login-page detection to avoid misclassifying authenticated pages that contain JavaScript password literals.
+- Improved noisy `userdetails` parsing so `trueUploadedBytes` / `trueDownloadedBytes` and level/name extraction remain correct with nested table layouts.
+
+### Added
+
+- Added local-vs-global CLI workflow scripts:
+  - `pnpm byr:dev -- ...` to run local built `byr` directly from workspace output.
+  - `pnpm byr:smoke-install` to validate tarball install in an isolated temp prefix.
+
+### Changed
+
+- Updated root README with local development and install-smoke best practices for BYR CLI.
+
 ## [0.1.8] - 2026-02-18
 
 ### Fixed

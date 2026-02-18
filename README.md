@@ -23,8 +23,7 @@ pnpm build
 Run BYR CLI locally from the workspace:
 
 ```bash
-pnpm --filter byr-pt-cli build
-pnpm --filter byr-pt-cli exec byr help
+pnpm byr:dev -- help
 ```
 
 Install published CLI globally:
@@ -32,6 +31,19 @@ Install published CLI globally:
 ```bash
 npm i -g byr-pt-cli
 byr help
+```
+
+Keep local dev and global install separated:
+
+```bash
+# Always local workspace build/output
+pnpm byr:dev -- whoami --json
+
+# Inspect which byr is used in shell
+which -a byr
+
+# Smoke test install from local tarball (temporary npm prefix, no global pollution)
+pnpm byr:smoke-install
 ```
 
 ## Common Commands

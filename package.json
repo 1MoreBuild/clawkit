@@ -12,6 +12,8 @@
     "format": "oxfmt --write",
     "format:check": "oxfmt --check",
     "check": "pnpm format:check && pnpm lint && pnpm -r check",
+    "byr:dev": "bash ./scripts/byr-dev.sh",
+    "byr:smoke-install": "bash ./scripts/smoke-install-byr.sh",
     "publish:package": "echo 'Usage: pnpm --filter <package-name> publish --access public'",
     "publish:skill": "echo 'Usage: pnpm --filter <package-name> skill:publish'",
     "sync:skills": "echo 'Usage: pnpm --filter <package-name> skill:sync'"

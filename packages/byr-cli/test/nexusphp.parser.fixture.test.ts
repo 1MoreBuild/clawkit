@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   extractDownloadUrl,
+  looksLikeLoginPage,
   normalizeDetailsToDownloadUrl,
   parseBonusPerHour,
   parseSearchItems,
@@ -173,9 +174,115 @@ describe("NexusPHP parser fixtures", () => {
     expect(parseUploads(seedingHtml)).toBe(14);
   });
 
+  it("parses BYR user details page with noisy header blocks", () => {
+    const html = `
+      <html>
+        <body>
+          <table>
+            <tr>
+              <td>
+                <span class='color_bonus'>等级 </span>
+                看板娘祝你新年快乐~
+              </td>
+            </tr>
+          </table>
+
+          欢迎,
+          <a class='CrazyUser_Name' href='/userdetails.php?id=146005'>
+            <span style='font-weight: bold'>MrWanted</span>
+          </a>
+          [<a href="logout.php?key=abc">退出</a>]
+
+          <h1>
+            <a class='CrazyUser_Name' href='/userdetails.php?id=146005'>
+              <span style='font-weight: bold'>MrWanted</span>
+            </a>
+          </h1>
+
+          <table>
+            <tr>
+              <td class="rowhead nowrap">加入日期</td>
+              <td class="rowfollow">2012-09-07 13:49:43</td>
+            </tr>
+            <tr>
+              <td class="rowhead nowrap">最近动向</td>
+              <td class="rowfollow">2026-02-18 17:47:37</td>
+            </tr>
+            <tr>
+              <td class="rowhead nowrap">传输</td>
+              <td class="rowfollow">
+                <strong>分享率</strong>: 2.382
+                <strong>上传量</strong>: 12.519 TiB
+                <strong>下载量</strong>: 5.255 TiB
+              </td>
+            </tr>
+            <tr>
+              <td class="rowhead nowrap">等级</td>
+              <td class="rowfollow">
+                <img alt="Crazy User" title="Crazy User" src="pic/crazy.gif" />
+              </td>
+            </tr>
+            <tr>
+              <td class="rowhead nowrap">魔力值</td>
+              <td class="rowfollow">2275285.0</td>
+            </tr>
+          </table>
+
+          <script>
+            Swal.fire({ input: 'password' })
+          </script>
+        </body>
+      </html>
+    `;
+
+    const info = parseUserInfoFromDetails(html, "146005");
+    expect(info.id).toBe("146005");
+    expect(info.name).toBe("MrWanted");
+    expect(info.levelName).toBe("Crazy User");
+    expect(info.ratio).toBeCloseTo(2.382, 3);
+    expect(info.uploadedBytes).toBeGreaterThan(10_000_000_000_000);
+    expect(info.downloadedBytes).toBeGreaterThan(5_000_000_000_000);
+    expect(info.trueUploadedBytes).toBe(info.uploadedBytes);
+    expect(info.trueDownloadedBytes).toBe(info.downloadedBytes);
+  });
+
   it("normalizes details.php download URI", () => {
     expect(normalizeDetailsToDownloadUrl("https://byr.pt/details.php?id=99&hit=1")).toBe(
       "https://byr.pt/download.php?id=99",
     );
+  });
+
+  it("does not misclassify authenticated user profile page as login page", () => {
+    const html = `
+      <html>
+        <body>
+          欢迎, <a href="userdetails.php?id=9527">mock-user</a>
+          [<a href="logout.php?key=abc123">退出</a>]
+          <script>
+            Swal.fire({
+              input: 'password',
+              title: '确认操作'
+            });
+          </script>
+        </body>
+      </html>
+    `;
+
+    expect(looksLikeLoginPage(html)).toBe(false);
+  });
+
+  it("detects classic login form page", () => {
+    const html = `
+      <html>
+        <body>
+          <form action="/takelogin.php" method="post">
+            <input type="text" name="username" />
+            <input type="password" name="password" />
+          </form>
+        </body>
+      </html>
+    `;
+
+    expect(looksLikeLoginPage(html)).toBe(true);
   });
 });

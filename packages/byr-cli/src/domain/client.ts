@@ -171,17 +171,18 @@ export function createByrClient(options: ByrClientOptions = {}): ByrClient {
       redirect: "manual",
     });
 
-    const verifyHtml = await session.fetchText(
-      {
-        pathOrUrl: "/torrents.php",
-        method: "GET",
-        includeAuthCookie: true,
-        redirect: "follow",
-      },
-      "Unable to verify BYR login state",
-    );
+    const verifyResponse = await session.fetch({
+      pathOrUrl: "/torrents.php",
+      method: "GET",
+      includeAuthCookie: true,
+      redirect: "follow",
+    });
+    if (!verifyResponse.ok) {
+      throw mapNonOkResponse(verifyResponse, "Unable to verify BYR login state");
+    }
+    const verifyHtml = await verifyResponse.text();
 
-    if (looksLikeLoginPage(verifyHtml)) {
+    if (looksLikeAuthPage(verifyResponse, verifyHtml)) {
       throw new CliAppError({
         code: "E_AUTH_INVALID",
         message: "BYR authentication failed. Check BYR_USERNAME/BYR_PASSWORD.",
@@ -192,16 +193,18 @@ export function createByrClient(options: ByrClientOptions = {}): ByrClient {
   async function fetchAuthenticatedHtml(pathOrUrl: string): Promise<string> {
     await ensureAuthenticated();
 
-    const firstHtml = await session.fetchText(
-      {
-        pathOrUrl,
-        method: "GET",
-        includeAuthCookie: true,
-        redirect: "follow",
-      },
-      `Unable to request ${pathOrUrl}`,
-    );
-    if (!looksLikeLoginPage(firstHtml)) {
+    const firstResponse = await session.fetch({
+      pathOrUrl,
+      method: "GET",
+      includeAuthCookie: true,
+      redirect: "follow",
+    });
+    if (!firstResponse.ok) {
+      throw mapNonOkResponse(firstResponse, `Unable to request ${pathOrUrl}`);
+    }
+    const firstHtml = await firstResponse.text();
+
+    if (!looksLikeAuthPage(firstResponse, firstHtml)) {
       return firstHtml;
     }
 
@@ -211,16 +214,18 @@ export function createByrClient(options: ByrClientOptions = {}): ByrClient {
 
     await ensureAuthenticated(true);
 
-    const secondHtml = await session.fetchText(
-      {
-        pathOrUrl,
-        method: "GET",
-        includeAuthCookie: true,
-        redirect: "follow",
-      },
-      `Unable to request ${pathOrUrl}`,
-    );
-    if (looksLikeLoginPage(secondHtml)) {
+    const secondResponse = await session.fetch({
+      pathOrUrl,
+      method: "GET",
+      includeAuthCookie: true,
+      redirect: "follow",
+    });
+    if (!secondResponse.ok) {
+      throw mapNonOkResponse(secondResponse, `Unable to request ${pathOrUrl}`);
+    }
+    const secondHtml = await secondResponse.text();
+
+    if (looksLikeAuthPage(secondResponse, secondHtml)) {
       throw new CliAppError({
         code: "E_AUTH_INVALID",
         message: "BYR authentication failed after relogin.",
@@ -293,7 +298,7 @@ export function createByrClient(options: ByrClientOptions = {}): ByrClient {
       const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
       if (contentType.includes("text/html")) {
         const html = await response.text();
-        if (looksLikeLoginPage(html)) {
+        if (looksLikeAuthPage(response, html)) {
           throw buildAuthExpiredError();
         }
 
@@ -543,6 +548,23 @@ function buildAuthExpiredError(): CliAppError {
     code: "E_AUTH_REQUIRED",
     message: "BYR authentication is required or expired.",
   });
+}
+
+function looksLikeAuthPage(response: Response, html: string): boolean {
+  if (isLoginRoute(response.url)) {
+    return true;
+  }
+
+  return looksLikeLoginPage(html);
+}
+
+function isLoginRoute(responseUrl: string): boolean {
+  try {
+    const path = new URL(responseUrl).pathname.toLowerCase();
+    return path === "/login" || path === "/login/" || path === "/login.php";
+  } catch {
+    return false;
+  }
 }
 
 function sanitizeTimeout(timeoutMs: number | undefined): number {
