@@ -212,7 +212,9 @@ describe("real BYR upstream client", () => {
         .join("");
 
       const pager =
-        nextPage === undefined ? "" : `<div class="pagenum"><a href="torrents.php?page=${nextPage}">next</a></div>`;
+        nextPage === undefined
+          ? ""
+          : `<div class="pagenum"><a href="torrents.php?page=${nextPage}">next</a></div>`;
 
       return `
         <html>
