@@ -24,14 +24,14 @@ Run BYR CLI locally from the workspace:
 
 ```bash
 pnpm --filter byr-pt-cli build
-pnpm --filter byr-pt-cli exec byr --help
+pnpm --filter byr-pt-cli exec byr help
 ```
 
 Install published CLI globally:
 
 ```bash
 npm i -g byr-pt-cli
-byr --help
+byr help
 ```
 
 ## Common Commands

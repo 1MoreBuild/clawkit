@@ -6,7 +6,7 @@ CLI for `byr.pt` with stable machine-readable output (`--json`) and script-frien
 
 ```bash
 npm i -g byr-pt-cli
-byr --help
+byr help
 ```
 
 ## Quick start
