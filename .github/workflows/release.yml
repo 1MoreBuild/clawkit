@@ -76,6 +76,7 @@ jobs:
 
       - name: Run quality checks
         run: |
+          pnpm --filter clawkit-cli-core build
           pnpm check
           pnpm --filter "${PACKAGE_NAME}" build
 
