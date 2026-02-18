@@ -331,7 +331,10 @@ export function createByrClient(options: ByrClientOptions = {}): ByrClient {
       return result.items;
     },
 
-    async browseWithMeta(limit: number, options: ByrBrowseOptions = {}): Promise<ByrTorrentListResult> {
+    async browseWithMeta(
+      limit: number,
+      options: ByrBrowseOptions = {},
+    ): Promise<ByrTorrentListResult> {
       return fetchTorrentList({
         limit,
         options,
