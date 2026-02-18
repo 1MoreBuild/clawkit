@@ -81,9 +81,7 @@ jobs:
           pnpm check
           pnpm --filter "${PACKAGE_NAME}" build
 
-      - name: Publish npm package
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish npm package (OIDC trusted publishing)
         run: |
           if npm view "${PACKAGE_NAME}@${RELEASE_VERSION}" version >/dev/null 2>&1; then
             echo "${PACKAGE_NAME}@${RELEASE_VERSION} already published, skip npm publish."
