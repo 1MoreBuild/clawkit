@@ -5,7 +5,7 @@ import { pbkdf2Sync, createDecipheriv } from "node:crypto";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 
-import { CliAppError } from "@onemoreproduct/cli-core";
+import { CliAppError } from "clawkit-cli-core";
 
 interface BrowserCookieImportResult {
   cookie: string;

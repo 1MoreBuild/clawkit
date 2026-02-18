@@ -2,7 +2,7 @@ import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
-import { CliAppError } from "@onemoreproduct/cli-core";
+import { CliAppError } from "clawkit-cli-core";
 
 export interface ByrAuthStore {
   cookie: string;

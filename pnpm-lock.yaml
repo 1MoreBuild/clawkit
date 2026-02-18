@@ -32,8 +32,8 @@ importers:
 
   packages/byr-cli:
     dependencies:
-      '@onemoreproduct/cli-core':
-        specifier: workspace:*
+      'clawkit-cli-core':
+        specifier: workspace:^0.1.0
         version: link:../cli-core
 
   packages/cli-core: {}

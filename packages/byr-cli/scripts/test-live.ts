@@ -2,7 +2,7 @@
 
 import process from "node:process";
 
-import { CliAppError } from "@onemoreproduct/cli-core";
+import { CliAppError } from "clawkit-cli-core";
 
 import { createByrClientFromEnv } from "../src/domain/client.js";
 

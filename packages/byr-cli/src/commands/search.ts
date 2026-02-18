@@ -1,4 +1,4 @@
-import { CliAppError } from "@onemoreproduct/cli-core";
+import { CliAppError } from "clawkit-cli-core";
 
 import type { ByrClient } from "../domain/client.js";
 import type { ByrSearchOptions } from "../domain/types.js";

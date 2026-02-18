@@ -1,5 +1,5 @@
 {
-  "name": "@onemoreproduct/cli-core",
+  "name": "clawkit-cli-core",
   "version": "0.1.0",
   "private": false,
   "description": "Shared CLI contracts and helpers for clawkit packages",

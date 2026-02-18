@@ -1,6 +1,6 @@
 {
   "name": "byr-pt-cli",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "private": false,
   "description": "BYR CLI with OpenClaw-friendly JSON contract",
   "license": "MIT",
@@ -22,7 +22,7 @@
   },
   "scripts": {
     "build": "tsdown src/index.ts src/cli.ts src/domain/client.ts src/domain/types.ts src/commands/download.ts src/commands/get.ts src/commands/search.ts --format esm --dts",
-    "test": "pnpm --filter @onemoreproduct/cli-core build && vitest run",
+    "test": "pnpm --filter clawkit-cli-core build && vitest run",
     "test:live": "tsx ./scripts/test-live.ts",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "check": "pnpm typecheck && pnpm test",
@@ -30,6 +30,6 @@
     "skill:sync": "clawhub sync --root ./skill-openclaw --all"
   },
   "dependencies": {
-    "@onemoreproduct/cli-core": "workspace:*"
+    "clawkit-cli-core": "workspace:^0.1.0"
   }
 }

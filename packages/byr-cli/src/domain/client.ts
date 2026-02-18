@@ -1,4 +1,4 @@
-import { CliAppError } from "@onemoreproduct/cli-core";
+import { CliAppError } from "clawkit-cli-core";
 
 import {
   BYR_BOOKMARKED_FACET,

@@ -8,7 +8,7 @@ import {
   EXIT_CODES,
   mapErrorCodeToExitCode,
   toCliAppError,
-} from "@onemoreproduct/cli-core";
+} from "clawkit-cli-core";
 
 import { runDownloadCommand, renderDownloadOutput } from "./commands/download.js";
 import { runGetCommand, renderGetOutput } from "./commands/get.js";
