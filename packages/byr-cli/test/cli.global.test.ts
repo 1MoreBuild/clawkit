@@ -46,6 +46,9 @@ describe("CLI global behavior", () => {
     });
     expect(helpExitCode).toBe(0);
     expect(stdout.read()).toContain("byr CLI");
+    expect(stdout.read()).toContain("byr browse");
+    expect(stdout.read()).toContain("byr doctor");
+    expect(stdout.read()).toContain("byr auth login");
     expect(stdout.read()).toContain("byr search");
     expect(stderr.read()).toBe("");
 

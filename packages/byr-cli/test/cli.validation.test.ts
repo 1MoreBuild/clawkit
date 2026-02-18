@@ -48,9 +48,26 @@ describe("CLI parameter validation", () => {
     expect(stderr.read()).toContain("E_ARG_CONFLICT");
   });
 
+  it("fails when browse is called with --query or --imdb", async () => {
+    const stdout = new BufferWriter();
+    const stderr = new BufferWriter();
+
+    const exitCode = await runCli(["browse", "--query", "matrix"], {
+      client: createMockByrClient(),
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(2);
+    expect(stderr.read()).toContain("E_ARG_UNSUPPORTED");
+  });
+
   it("accepts category aliases and comma-separated category ids", async () => {
     let capturedOptions: unknown;
     const client: ByrClient = {
+      async browse() {
+        return [];
+      },
       async search(_query, _limit, options) {
         capturedOptions = options;
         return [];

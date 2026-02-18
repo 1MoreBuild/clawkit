@@ -210,4 +210,95 @@ describe("auth command flow", () => {
       },
     });
   });
+
+  it("supports auth login with credentials and persists cookie", async () => {
+    isolateHome();
+    const stdout = new BufferWriter();
+    const stderr = new BufferWriter();
+
+    const loginCode = await runCli(
+      ["auth", "login", "--username", "demo-user", "--password", "demo-pass", "--json"],
+      {
+        stdout,
+        stderr,
+        loginWithCredentials: async (input) => {
+          expect(input).toMatchObject({
+            username: "demo-user",
+            password: "demo-pass",
+          });
+          return { cookie: "uid=login-user; pass=login-pass" };
+        },
+      },
+    );
+
+    expect(loginCode).toBe(0);
+    expect(JSON.parse(stdout.read())).toMatchObject({
+      ok: true,
+      data: {
+        source: "login",
+      },
+    });
+
+    stdout.chunks = [];
+    const statusCode = await runCli(["auth", "status", "--json"], {
+      stdout,
+      stderr,
+    });
+    expect(statusCode).toBe(0);
+    expect(JSON.parse(stdout.read())).toMatchObject({
+      ok: true,
+      data: {
+        hasCredentials: true,
+        source: "login",
+      },
+    });
+  });
+
+  it("supports interactive auth login prompt fallback", async () => {
+    isolateHome();
+    const stdout = new BufferWriter();
+    const stderr = new BufferWriter();
+
+    const loginCode = await runCli(["auth", "login", "--json"], {
+      stdout,
+      stderr,
+      isInteractive: true,
+      promptInput: async (input) => (input.key === "username" ? "prompt-user" : "prompt-pass"),
+      loginWithCredentials: async (input) => {
+        expect(input).toMatchObject({
+          username: "prompt-user",
+          password: "prompt-pass",
+        });
+        return { cookie: "session_id=s1; auth_token=a1; refresh_token=r1" };
+      },
+    });
+
+    expect(loginCode).toBe(0);
+    expect(JSON.parse(stdout.read())).toMatchObject({
+      ok: true,
+      data: {
+        source: "login",
+      },
+    });
+  });
+
+  it("fails auth login without credentials in non-interactive mode", async () => {
+    isolateHome();
+    const stdout = new BufferWriter();
+    const stderr = new BufferWriter();
+
+    const loginCode = await runCli(["auth", "login", "--json"], {
+      stdout,
+      stderr,
+      isInteractive: false,
+    });
+
+    expect(loginCode).toBe(2);
+    expect(JSON.parse(stdout.read())).toMatchObject({
+      ok: false,
+      error: {
+        code: "E_ARG_MISSING",
+      },
+    });
+  });
 });

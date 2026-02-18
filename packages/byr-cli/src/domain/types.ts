@@ -46,6 +46,14 @@ export interface ByrSearchOptions {
   page?: number;
 }
 
+export interface ByrBrowseOptions {
+  categoryIds?: number[];
+  incldead?: 0 | 1 | 2;
+  spstate?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  bookmarked?: 0 | 1 | 2;
+  page?: number;
+}
+
 export interface ByrCategoryOption {
   value: number;
   name: string;

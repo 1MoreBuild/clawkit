@@ -23,6 +23,9 @@ describe("download --dry-run", () => {
     let writeCalls = 0;
 
     const client: ByrClient = {
+      async browse() {
+        return [];
+      },
       async search() {
         return [];
       },

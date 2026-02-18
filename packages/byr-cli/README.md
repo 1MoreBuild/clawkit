@@ -1,6 +1,6 @@
 # byr-pt-cli
 
-CLI for `byr.pt` with stable machine-readable output (`--json`) and script-friendly commands for search, details, download, auth, and user stats.
+CLI for `byr.pt` with stable machine-readable output (`--json`) and script-friendly commands for browse/search/details/download/auth/user/meta.
 
 ## Install
 
@@ -31,6 +31,8 @@ byr --help
 byr --version
 byr check --json
 byr whoami --json
+byr doctor --verify --json
+byr browse --limit 20 --category movie --spstate free --json
 byr search --query "ubuntu" --limit 5 --category movie --spstate free
 byr search --imdb tt0133093 --json
 byr get --id 1001
@@ -39,6 +41,7 @@ byr user info --json
 byr meta categories --json
 byr meta levels --json
 byr auth status --verify --json
+byr auth login --username "<username>" --password "<password>" --json
 byr auth import-cookie --cookie "uid=...; pass=..." --json
 byr auth import-cookie --from-browser chrome --profile "Default" --json
 byr auth logout --json

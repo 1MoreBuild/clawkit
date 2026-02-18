@@ -26,6 +26,7 @@ import {
   parseUserInfoFromDetails,
 } from "./nexusphp/parser.js";
 import type {
+  ByrBrowseOptions,
   ByrCategoryFacet,
   ByrDownloadPlan,
   ByrLevelRequirement,
@@ -38,6 +39,7 @@ import type {
 } from "./types.js";
 
 export interface ByrClient {
+  browse(limit: number, options?: ByrBrowseOptions): Promise<ByrSearchItem[]>;
   search(query: string, limit: number, options?: ByrSearchOptions): Promise<ByrSearchItem[]>;
   getById(id: string): Promise<ByrTorrentDetail>;
   getDownloadPlan(id: string): Promise<ByrDownloadPlan>;
@@ -224,39 +226,24 @@ export function createByrClient(options: ByrClientOptions = {}): ByrClient {
   }
 
   return {
+    async browse(limit: number, options: ByrBrowseOptions = {}): Promise<ByrSearchItem[]> {
+      const params = buildTorrentListParams({
+        options,
+      });
+
+      const html = await fetchAuthenticatedHtml(`/torrents.php?${params.toString()}`);
+      return parseSearchItems(html, limit, baseUrl);
+    },
+
     async search(
       query: string,
       limit: number,
       options: ByrSearchOptions = {},
     ): Promise<ByrSearchItem[]> {
-      const params = new URLSearchParams({
-        notnewword: "1",
+      const params = buildTorrentListParams({
+        query,
+        options,
       });
-
-      if (options.imdb && options.imdb.trim().length > 0) {
-        params.set("search", options.imdb.trim());
-        params.set("search_area", "4");
-      } else {
-        params.set("search", query);
-      }
-
-      if (Array.isArray(options.categoryIds) && options.categoryIds.length > 0) {
-        for (const categoryId of options.categoryIds) {
-          params.set(`cat${categoryId}`, "1");
-        }
-      }
-      if (options.incldead !== undefined) {
-        params.set("incldead", String(options.incldead));
-      }
-      if (options.spstate !== undefined) {
-        params.set("spstate", String(options.spstate));
-      }
-      if (options.bookmarked !== undefined) {
-        params.set("inclbookmarked", String(options.bookmarked));
-      }
-      if (options.page !== undefined) {
-        params.set("page", String(options.page));
-      }
 
       const html = await fetchAuthenticatedHtml(`/torrents.php?${params.toString()}`);
       return parseSearchItems(html, limit, baseUrl);
@@ -653,6 +640,20 @@ const SAMPLE_TORRENTS: ByrTorrentDetail[] = [
 
 export function createMockByrClient(records: ByrTorrentDetail[] = SAMPLE_TORRENTS): ByrClient {
   return {
+    async browse(limit: number): Promise<ByrSearchItem[]> {
+      return records.slice(0, limit).map((item) => ({
+        id: item.id,
+        title: item.title,
+        size: item.size,
+        seeders: item.seeders,
+        leechers: item.leechers,
+        tags: item.tags,
+        sizeBytes: parseSizeToBytes(item.size),
+        time: item.uploadedAt,
+        category: item.category,
+      }));
+    },
+
     async search(query: string, limit: number): Promise<ByrSearchItem[]> {
       const normalized = query.trim().toLowerCase();
       if (normalized.length === 0) {
@@ -759,4 +760,41 @@ export function createMockByrClient(records: ByrTorrentDetail[] = SAMPLE_TORRENT
       return { authenticated: true };
     },
   };
+}
+
+function buildTorrentListParams(input: {
+  query?: string;
+  options: ByrSearchOptions | ByrBrowseOptions;
+}): URLSearchParams {
+  const params = new URLSearchParams({
+    notnewword: "1",
+  });
+
+  const imdb = "imdb" in input.options ? input.options.imdb : undefined;
+  if (typeof imdb === "string" && imdb.trim().length > 0) {
+    params.set("search", imdb.trim());
+    params.set("search_area", "4");
+  } else if (typeof input.query === "string" && input.query.trim().length > 0) {
+    params.set("search", input.query);
+  }
+
+  if (Array.isArray(input.options.categoryIds) && input.options.categoryIds.length > 0) {
+    for (const categoryId of input.options.categoryIds) {
+      params.set(`cat${categoryId}`, "1");
+    }
+  }
+  if (input.options.incldead !== undefined) {
+    params.set("incldead", String(input.options.incldead));
+  }
+  if (input.options.spstate !== undefined) {
+    params.set("spstate", String(input.options.spstate));
+  }
+  if (input.options.bookmarked !== undefined) {
+    params.set("inclbookmarked", String(input.options.bookmarked));
+  }
+  if (input.options.page !== undefined) {
+    params.set("page", String(input.options.page));
+  }
+
+  return params;
 }

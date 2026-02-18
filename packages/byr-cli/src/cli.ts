@@ -1,5 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { createInterface } from "node:readline/promises";
 
 import {
   CliAppError,
@@ -11,7 +12,9 @@ import {
   toCliAppError,
 } from "clawkit-cli-core";
 
+import { runBrowseCommand, renderBrowseOutput } from "./commands/browse.js";
 import { runDownloadCommand, renderDownloadOutput } from "./commands/download.js";
+import { getDoctorFailureCode, renderDoctorOutput, runDoctorCommand } from "./commands/doctor.js";
 import { runGetCommand, renderGetOutput } from "./commands/get.js";
 import { runSearchCommand, renderSearchOutput } from "./commands/search.js";
 import {
@@ -25,13 +28,14 @@ import {
 import { createByrClient, type ByrClient } from "./domain/client.js";
 import { importCookieFromBrowser } from "./domain/auth/browser.js";
 import { resolveClientConfig, type FlagValue } from "./domain/auth/config.js";
+import { loginByrWithCredentials } from "./domain/auth/login.js";
 import {
   clearAuthStore,
   maskCookieHeader,
   validateByrCookie,
   writeAuthStore,
 } from "./domain/auth/store.js";
-import type { ByrSearchOptions, ByrSimpleFacet } from "./domain/types.js";
+import type { ByrBrowseOptions, ByrSearchOptions, ByrSimpleFacet } from "./domain/types.js";
 
 interface WritableLike {
   write: (chunk: string) => unknown;
@@ -42,6 +46,14 @@ export interface ByrCliDeps {
   stdout?: WritableLike;
   stderr?: WritableLike;
   fileWriter?: (path: string, content: Uint8Array) => Promise<void>;
+  loginWithCredentials?: (input: {
+    baseUrl?: string;
+    timeoutMs?: number;
+    username: string;
+    password: string;
+  }) => Promise<{ cookie: string }>;
+  promptInput?: (input: PromptInput) => Promise<string>;
+  isInteractive?: boolean;
   clock?: () => number;
   now?: () => Date;
   requestIdFactory?: () => string;
@@ -63,6 +75,12 @@ interface VersionInfo {
   version: string;
 }
 
+interface PromptInput {
+  key: "username" | "password";
+  message: string;
+  secret?: boolean;
+}
+
 const SHORT_FLAG_ALIASES: Record<string, string> = {
   "-h": "help",
   "-V": "version",
@@ -74,6 +92,9 @@ const CLI_VERSION = loadVersionInfo();
 export async function runCli(argv: string[], deps: ByrCliDeps = {}): Promise<number> {
   const stdout = deps.stdout ?? process.stdout;
   const stderr = deps.stderr ?? process.stderr;
+  const loginWithCredentials = deps.loginWithCredentials ?? loginByrWithCredentials;
+  const promptInput = deps.promptInput ?? defaultPromptInput;
+  const isInteractive = deps.isInteractive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
   const parsed = parseArgs(argv);
   const json = getBooleanFlag(parsed.flags, "json");
   const verbose = getBooleanFlag(parsed.flags, "verbose");
@@ -144,6 +165,9 @@ export async function runCli(argv: string[], deps: ByrCliDeps = {}): Promise<num
     const result = await dispatch(parsed, {
       getClient,
       fileWriter: deps.fileWriter ?? writeFile,
+      loginWithCredentials,
+      promptInput,
+      isInteractive,
     });
 
     if (json) {
@@ -174,6 +198,14 @@ export async function runCli(argv: string[], deps: ByrCliDeps = {}): Promise<num
 interface DispatchDeps {
   getClient: () => Promise<ByrClient>;
   fileWriter: (path: string, content: Uint8Array) => Promise<void>;
+  loginWithCredentials: (input: {
+    baseUrl?: string;
+    timeoutMs?: number;
+    username: string;
+    password: string;
+  }) => Promise<{ cookie: string }>;
+  promptInput: (input: PromptInput) => Promise<string>;
+  isInteractive: boolean;
 }
 
 interface DispatchResult {
@@ -187,6 +219,10 @@ async function dispatch(parsed: ParsedArgs, deps: DispatchDeps): Promise<Dispatc
       return dispatchCheck(parsed, deps);
     case "whoami":
       return dispatchWhoami(parsed, deps);
+    case "browse":
+      return dispatchBrowse(parsed, deps);
+    case "doctor":
+      return dispatchDoctor(parsed, deps);
     case "search":
       return dispatchSearch(parsed, deps);
     case "get":
@@ -255,6 +291,73 @@ async function dispatchSearch(parsed: ParsedArgs, deps: DispatchDeps): Promise<D
   return {
     data: output,
     humanOutput: renderSearchOutput(output),
+  };
+}
+
+async function dispatchBrowse(parsed: ParsedArgs, deps: DispatchDeps): Promise<DispatchResult> {
+  const limit = getPositiveInteger(parsed.flags, "limit", 10);
+
+  if (hasFlag(parsed.flags, "query") || hasFlag(parsed.flags, "imdb")) {
+    throw createArgumentError("E_ARG_UNSUPPORTED", "browse does not support --query or --imdb", {
+      args: ["query", "imdb"],
+    });
+  }
+
+  const categoryRaw = getStringValues(parsed.flags, "category");
+  const categoryParsed = parseCategoryAliases(categoryRaw);
+  if (categoryParsed.invalid.length > 0) {
+    throw createArgumentError("E_ARG_INVALID", "--category contains invalid values", {
+      invalid: categoryParsed.invalid,
+      allowed: getByrMetadata()
+        .category.options.map((option) => option.aliases)
+        .flat(),
+    });
+  }
+
+  const incldead = parseSingleFacetFlag(parsed.flags, "incldead", BYR_INCLDEAD_FACET);
+  const spstate = parseSingleFacetFlag(parsed.flags, "spstate", BYR_SPSTATE_FACET);
+  const bookmarked = parseSingleFacetFlag(parsed.flags, "bookmarked", BYR_BOOKMARKED_FACET);
+  const page = getOptionalPositiveInteger(parsed.flags, "page");
+
+  const options: ByrBrowseOptions = {
+    categoryIds: categoryParsed.values.length > 0 ? categoryParsed.values : undefined,
+    incldead: incldead as ByrBrowseOptions["incldead"],
+    spstate: spstate as ByrBrowseOptions["spstate"],
+    bookmarked: bookmarked as ByrBrowseOptions["bookmarked"],
+    page,
+  };
+
+  const output = await runBrowseCommand(await deps.getClient(), {
+    limit,
+    options,
+  });
+  return {
+    data: output,
+    humanOutput: renderBrowseOutput(output),
+  };
+}
+
+async function dispatchDoctor(parsed: ParsedArgs, deps: DispatchDeps): Promise<DispatchResult> {
+  const verify = getBooleanFlag(parsed.flags, "verify");
+  const report = await runDoctorCommand(await deps.getClient(), {
+    cwd: process.cwd(),
+    env: process.env,
+    verify,
+    getFlag: (key) => parsed.flags.get(key),
+  });
+
+  const failureCode = getDoctorFailureCode(report);
+  if (failureCode) {
+    throw new CliAppError({
+      code: failureCode,
+      message: `Doctor found ${report.summary.errors} error(s).`,
+      details: report,
+    });
+  }
+
+  return {
+    data: report,
+    humanOutput: renderDoctorOutput(report),
   };
 }
 
@@ -394,6 +497,72 @@ async function dispatchAuth(parsed: ParsedArgs, deps: DispatchDeps): Promise<Dis
       };
     }
 
+    case "login": {
+      const resolved = await resolveClientConfig({
+        cwd: process.cwd(),
+        env: process.env,
+        getFlag: (key) => parsed.flags.get(key),
+      });
+
+      let username = getOptionalString(parsed.flags, "username") ?? resolved.username;
+      let password = getOptionalString(parsed.flags, "password") ?? resolved.password;
+
+      if (!username && deps.isInteractive) {
+        username = (
+          await deps.promptInput({
+            key: "username",
+            message: "BYR username: ",
+          })
+        ).trim();
+      }
+
+      if (!password && deps.isInteractive) {
+        password = await deps.promptInput({
+          key: "password",
+          message: "BYR password: ",
+          secret: true,
+        });
+      }
+
+      const normalizedUsername = username?.trim();
+      const normalizedPassword = password;
+
+      const missingArgs: string[] = [];
+      if (!normalizedUsername) {
+        missingArgs.push("username");
+      }
+      if (!normalizedPassword) {
+        missingArgs.push("password");
+      }
+
+      if (missingArgs.length > 0) {
+        throw createArgumentError(
+          "E_ARG_MISSING",
+          "--username/--password are required (or provide interactive input in a TTY)",
+          {
+            missing: missingArgs,
+          },
+        );
+      }
+
+      const login = await deps.loginWithCredentials({
+        baseUrl: resolved.baseUrl,
+        timeoutMs: resolved.timeoutMs,
+        username: normalizedUsername as string,
+        password: normalizedPassword as string,
+      });
+
+      const saved = await writeAuthStore(login.cookie, "login");
+      return {
+        data: {
+          source: saved.source,
+          updatedAt: saved.updatedAt,
+          cookie: maskCookieHeader(saved.cookie),
+        },
+        humanOutput: ["BYR login success.", `Updated: ${saved.updatedAt}`].join("\n"),
+      };
+    }
+
     case "import-cookie": {
       const manualCookie = getOptionalString(parsed.flags, "cookie");
       const fromBrowser = getOptionalString(parsed.flags, "from-browser");
@@ -451,7 +620,7 @@ async function dispatchAuth(parsed: ParsedArgs, deps: DispatchDeps): Promise<Dis
     default:
       throw createArgumentError(
         "E_ARG_UNSUPPORTED",
-        "auth subcommand must be: status|import-cookie|logout",
+        "auth subcommand must be: status|login|import-cookie|logout",
         {
           subcommand,
         },
@@ -782,6 +951,15 @@ function renderHelp(command?: string, subcommand?: string): string {
     ].join("\n");
   }
 
+  if (command === "browse") {
+    return [
+      "byr browse",
+      "",
+      "Usage:",
+      "  byr browse [--limit <n>] [--category <alias|id>] [--incldead <alias|id>] [--spstate <alias|id>] [--bookmarked <alias|id>] [--page <n>] [--json]",
+    ].join("\n");
+  }
+
   if (command === "user") {
     return ["byr user", "", "Usage:", "  byr user info [--json]"].join("\n");
   }
@@ -809,6 +987,14 @@ function renderHelp(command?: string, subcommand?: string): string {
         "  byr auth import-cookie --from-browser <chrome|safari> [--profile <name>] [--json]",
       ].join("\n");
     }
+    if (subcommand === "login") {
+      return [
+        "byr auth login",
+        "",
+        "Usage:",
+        "  byr auth login [--username <name>] [--password <password>] [--json]",
+      ].join("\n");
+    }
     if (subcommand === "logout") {
       return ["byr auth logout", "", "Usage:", "  byr auth logout [--json]"].join("\n");
     }
@@ -818,6 +1004,7 @@ function renderHelp(command?: string, subcommand?: string): string {
       "",
       "Usage:",
       "  byr auth status [--verify] [--json]",
+      "  byr auth login [--username <name>] [--password <password>] [--json]",
       '  byr auth import-cookie --cookie "uid=...; pass=..." [--json]',
       "  byr auth import-cookie --from-browser <chrome|safari> [--profile <name>] [--json]",
       "  byr auth logout [--json]",
@@ -836,6 +1023,10 @@ function renderHelp(command?: string, subcommand?: string): string {
     return ["byr version", "", "Usage:", "  byr version [--json]"].join("\n");
   }
 
+  if (command === "doctor") {
+    return ["byr doctor", "", "Usage:", "  byr doctor [--verify] [--json]"].join("\n");
+  }
+
   return [
     "byr CLI",
     "",
@@ -845,14 +1036,17 @@ function renderHelp(command?: string, subcommand?: string): string {
     "  byr version [--json]",
     "  byr check [--json]",
     "  byr whoami [--json]",
+    "  byr browse [--limit <n>] [--category <alias|id>] [--incldead <alias|id>] [--spstate <alias|id>] [--bookmarked <alias|id>] [--page <n>] [--json]",
     "  byr search --query <text> [--limit <n>] [--category <alias|id>] [--incldead <alias|id>] [--spstate <alias|id>] [--bookmarked <alias|id>] [--page <n>] [--json]",
     "  byr search --imdb <tt-id> [--limit <n>] [--json]",
     "  byr get --id <torrent-id> [--json]",
     "  byr download --id <torrent-id> --output <path> [--dry-run] [--json]",
+    "  byr doctor [--verify] [--json]",
     "  byr user info [--json]",
     "  byr meta categories [--json]",
     "  byr meta levels [--json]",
     "  byr auth status [--verify] [--json]",
+    "  byr auth login [--username <name>] [--password <password>] [--json]",
     '  byr auth import-cookie --cookie "uid=...; pass=..." [--json]',
     "  byr auth import-cookie --from-browser <chrome|safari> [--profile <name>] [--json]",
     "  byr auth logout [--json]",
@@ -883,6 +1077,95 @@ function loadVersionInfo(): VersionInfo {
       version: "0.0.0",
     };
   }
+}
+
+async function defaultPromptInput(input: PromptInput): Promise<string> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new CliAppError({
+      code: "E_ARG_MISSING",
+      message: "Interactive prompt is unavailable in non-TTY mode.",
+    });
+  }
+
+  if (input.secret) {
+    return promptHiddenInput(input.message);
+  }
+
+  const readline = createInterface({
+    input: process.stdin,
+    output: process.stderr,
+  });
+
+  try {
+    return (await readline.question(input.message)).trim();
+  } finally {
+    readline.close();
+  }
+}
+
+async function promptHiddenInput(message: string): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const input = process.stdin;
+    const output = process.stderr;
+
+    if (!input.isTTY || typeof input.setRawMode !== "function") {
+      reject(
+        new CliAppError({
+          code: "E_ARG_MISSING",
+          message: "Interactive password prompt is unavailable in non-TTY mode.",
+        }),
+      );
+      return;
+    }
+
+    let value = "";
+    output.write(message);
+
+    const onData = (chunk: Buffer | string): void => {
+      const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+
+      for (const char of text) {
+        if (char === "\r" || char === "\n") {
+          cleanup();
+          output.write("\n");
+          resolve(value);
+          return;
+        }
+
+        if (char === "\u0003") {
+          cleanup();
+          reject(
+            new CliAppError({
+              code: "E_UNKNOWN",
+              message: "Prompt interrupted by user.",
+            }),
+          );
+          return;
+        }
+
+        if (char === "\u007f" || char === "\b") {
+          if (value.length > 0) {
+            value = value.slice(0, -1);
+          }
+          continue;
+        }
+
+        value += char;
+      }
+    };
+
+    const cleanup = (): void => {
+      input.off("data", onData);
+      try {
+        input.setRawMode(false);
+      } catch {}
+      input.pause();
+    };
+
+    input.resume();
+    input.setRawMode(true);
+    input.on("data", onData);
+  });
 }
 
 function createArgumentError(
