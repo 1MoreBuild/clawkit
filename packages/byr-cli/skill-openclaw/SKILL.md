@@ -30,9 +30,11 @@ Use this skill when a task needs any BYR operation via CLI:
 
 - authenticate/check auth state
 - search torrents with filters
+- browse latest torrents with filters
 - inspect torrent details
 - plan or execute torrent downloads
 - fetch BYR metadata and user info
+- run local diagnostics before live calls
 
 ## Boundaries
 
@@ -56,6 +58,10 @@ Use this skill when a task needs any BYR operation via CLI:
 
 Read-only:
 
+- `byr check --json`
+- `byr whoami --json`
+- `byr doctor [--verify] --json`
+- `byr browse [--limit <n>] [--category <alias|id>] [--incldead <alias|id>] [--spstate <alias|id>] [--bookmarked <alias|id>] [--page <n>] --json`
 - `byr search --query "<text>" --limit <n> --json`
 - `byr search --imdb <tt-id> [--category <alias|id>] [--spstate <alias|id>] --json`
 - `byr get --id <torrent-id> --json`
@@ -71,6 +77,16 @@ Write side effect:
 
 - Dry run first: `byr download --id <torrent-id> --output <path> --dry-run --json`
 - Actual write: `byr download --id <torrent-id> --output <path> --json`
+
+## Search/Browse Semantics
+
+- `search` and `browse` return paged list data.
+- JSON fields:
+  - `matchedTotal`: estimated total hits inferred from BYR pagination range blocks.
+  - `returned`: number of items returned in current payload.
+  - `total`: backward-compatible alias of `returned`.
+- If `--page` is omitted, list commands auto-fetch subsequent pages until `--limit` is reached.
+- If `--page` is provided, only that page is fetched.
 
 ## Side-Effect Policy
 
@@ -94,4 +110,5 @@ If parameters are missing, ask for explicit values.
 
 - Keep result summaries short.
 - Include key fields for search/get: `id`, `title`, `size`, `seeders`, `leechers`.
+- For list commands include both `matchedTotal` and `returned` when present.
 - Include key fields for download: `outputPath`, `sourceUrl`, `dryRun`, `bytesWritten`.

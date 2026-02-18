@@ -28,7 +28,7 @@ for (const field of ["slug", "name", "version"]) {
 
 const args = [
   "publish",
-  "./skill-openclaw",
+  skillRoot,
   "--slug",
   publishConfig.slug,
   "--name",

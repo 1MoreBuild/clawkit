@@ -6,6 +6,12 @@
 byr search --query "ubuntu" --limit 5 --json
 ```
 
+## Browse
+
+```bash
+byr browse --limit 20 --category movie --spstate free --json
+```
+
 ## Search by IMDb
 
 ```bash
@@ -33,6 +39,9 @@ byr download --id 1001 --output ./1001.torrent --json
 ## User info
 
 ```bash
+byr check --json
+byr whoami --json
+byr doctor --verify --json
 byr user info --json
 ```
 
