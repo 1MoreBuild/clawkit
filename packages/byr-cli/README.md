@@ -27,6 +27,10 @@ byr download --id 1001 --output ./1001.torrent --dry-run
 ## Commands
 
 ```bash
+byr --help
+byr --version
+byr check --json
+byr whoami --json
 byr search --query "ubuntu" --limit 5 --category movie --spstate free
 byr search --imdb tt0133093 --json
 byr get --id 1001

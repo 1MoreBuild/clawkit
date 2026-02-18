@@ -4,7 +4,7 @@
 
 ## Packages
 
-- `byr-pt-cli`: CLI for `byr.pt` (`byr search/get/download/auth/user/meta`)
+- `byr-pt-cli`: CLI for `byr.pt` (`byr search/get/download/auth/user/meta/check/whoami`)
 - `clawkit-cli-core`: shared envelope/errors/exit-code contracts
 
 ## Requirements

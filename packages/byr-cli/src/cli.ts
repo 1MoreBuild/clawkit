@@ -1,4 +1,5 @@
 import { writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 
 import {
   CliAppError,
@@ -52,6 +53,24 @@ interface ParsedArgs {
   positional: string[];
 }
 
+interface HelpTarget {
+  command?: string;
+  subcommand?: string;
+}
+
+interface VersionInfo {
+  name: string;
+  version: string;
+}
+
+const SHORT_FLAG_ALIASES: Record<string, string> = {
+  "-h": "help",
+  "-V": "version",
+  "-v": "verbose",
+};
+
+const CLI_VERSION = loadVersionInfo();
+
 export async function runCli(argv: string[], deps: ByrCliDeps = {}): Promise<number> {
   const stdout = deps.stdout ?? process.stdout;
   const stderr = deps.stderr ?? process.stderr;
@@ -66,8 +85,32 @@ export async function runCli(argv: string[], deps: ByrCliDeps = {}): Promise<num
     verbose,
   });
 
-  if (parsed.command === undefined || parsed.command === "help") {
-    stdout.write(`${renderHelp()}\n`);
+  if (hasFlag(parsed.flags, "version") || parsed.command === "version") {
+    if (json) {
+      stdout.write(`${JSON.stringify(createSuccessEnvelope(CLI_VERSION, context.toMeta()))}\n`);
+    } else {
+      stdout.write(`${CLI_VERSION.name} ${CLI_VERSION.version}\n`);
+    }
+    return EXIT_CODES.SUCCESS;
+  }
+
+  if (parsed.command === undefined || parsed.command === "help" || hasFlag(parsed.flags, "help")) {
+    const helpTarget = resolveHelpTarget(parsed);
+    const helpText = renderHelp(helpTarget.command, helpTarget.subcommand);
+    if (json) {
+      const helpData: Record<string, unknown> = {
+        help: helpText,
+      };
+      if (helpTarget.command) {
+        helpData.command = helpTarget.command;
+      }
+      if (helpTarget.subcommand) {
+        helpData.subcommand = helpTarget.subcommand;
+      }
+      stdout.write(`${JSON.stringify(createSuccessEnvelope(helpData, context.toMeta()))}\n`);
+    } else {
+      stdout.write(`${helpText}\n`);
+    }
     return EXIT_CODES.SUCCESS;
   }
 
@@ -140,6 +183,10 @@ interface DispatchResult {
 
 async function dispatch(parsed: ParsedArgs, deps: DispatchDeps): Promise<DispatchResult> {
   switch (parsed.command) {
+    case "check":
+      return dispatchCheck(parsed, deps);
+    case "whoami":
+      return dispatchWhoami(parsed, deps);
     case "search":
       return dispatchSearch(parsed, deps);
     case "get":
@@ -412,35 +459,121 @@ async function dispatchAuth(parsed: ParsedArgs, deps: DispatchDeps): Promise<Dis
   }
 }
 
+async function dispatchCheck(parsed: ParsedArgs, deps: DispatchDeps): Promise<DispatchResult> {
+  if (parsed.positional.length > 0) {
+    throw createArgumentError("E_ARG_UNSUPPORTED", "check command does not accept subcommands", {
+      positional: parsed.positional,
+    });
+  }
+
+  const resolved = await resolveClientConfig({
+    cwd: process.cwd(),
+    env: process.env,
+    getFlag: (key) => parsed.flags.get(key),
+  });
+
+  const hasCredentials = typeof resolved.cookie === "string" && resolved.cookie.trim().length > 0;
+  if (!hasCredentials) {
+    throw new CliAppError({
+      code: "E_AUTH_REQUIRED",
+      message: "Missing BYR credentials. Set BYR_COOKIE or run `byr auth import-cookie`.",
+    });
+  }
+
+  const client = await deps.getClient();
+  let authenticated = true;
+  if (typeof client.verifyAuth === "function") {
+    const verify = await client.verifyAuth();
+    authenticated = verify.authenticated;
+  }
+
+  if (!authenticated) {
+    throw new CliAppError({
+      code: "E_AUTH_INVALID",
+      message: "BYR credentials are present but verification failed.",
+    });
+  }
+
+  const result = {
+    hasCredentials: true,
+    authenticated: true,
+    source: resolved.cookieSource ?? "none",
+  };
+
+  return {
+    data: result,
+    humanOutput: ["Authentication: valid", `Source: ${result.source}`].join("\n"),
+  };
+}
+
+async function dispatchWhoami(parsed: ParsedArgs, deps: DispatchDeps): Promise<DispatchResult> {
+  if (parsed.positional.length > 0) {
+    throw createArgumentError("E_ARG_UNSUPPORTED", "whoami command does not accept subcommands", {
+      positional: parsed.positional,
+    });
+  }
+
+  const client = await deps.getClient();
+  if (typeof client.getUserInfo !== "function") {
+    throw createArgumentError("E_ARG_UNSUPPORTED", "Current client does not support user info", {});
+  }
+
+  const info = await client.getUserInfo();
+  const result = {
+    id: info.id,
+    name: info.name,
+    levelName: info.levelName,
+    levelId: info.levelId,
+    ratio: info.ratio,
+  };
+
+  return {
+    data: result,
+    humanOutput: `${info.name} (${info.id}) | Level: ${info.levelName}${info.levelId ? ` (#${info.levelId})` : ""} | Ratio: ${info.ratio}`,
+  };
+}
+
 function parseArgs(argv: string[]): ParsedArgs {
-  const command = argv[0];
+  let command: string | undefined;
   const flags = new Map<string, FlagValue>();
   const positional: string[] = [];
 
-  for (let index = 1; index < argv.length; index += 1) {
+  for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
-    if (!token.startsWith("--")) {
-      positional.push(token);
+
+    const shortAlias = SHORT_FLAG_ALIASES[token];
+    if (shortAlias !== undefined) {
+      flags.set(shortAlias, true);
       continue;
     }
 
-    const stripped = token.slice(2);
-    const eqIndex = stripped.indexOf("=");
-    if (eqIndex >= 0) {
-      const key = stripped.slice(0, eqIndex);
-      const value = stripped.slice(eqIndex + 1);
-      appendFlagValue(flags, key, value);
+    if (token.startsWith("--")) {
+      const stripped = token.slice(2);
+      const eqIndex = stripped.indexOf("=");
+      if (eqIndex >= 0) {
+        const key = stripped.slice(0, eqIndex);
+        const value = stripped.slice(eqIndex + 1);
+        appendFlagValue(flags, key, value);
+        continue;
+      }
+
+      const next = argv[index + 1];
+      if (next !== undefined && !next.startsWith("-")) {
+        appendFlagValue(flags, stripped, next);
+        index += 1;
+        continue;
+      }
+
+      flags.set(stripped, true);
       continue;
     }
 
-    const next = argv[index + 1];
-    if (next !== undefined && !next.startsWith("--")) {
-      appendFlagValue(flags, stripped, next);
-      index += 1;
+    if (command === undefined) {
+      command = token;
       continue;
     }
 
-    flags.set(stripped, true);
+    positional.push(token);
   }
 
   return {
@@ -448,6 +581,10 @@ function parseArgs(argv: string[]): ParsedArgs {
     flags,
     positional,
   };
+}
+
+function hasFlag(flags: Map<string, FlagValue>, key: string): boolean {
+  return flags.has(key);
 }
 
 function appendFlagValue(flags: Map<string, FlagValue>, key: string, value: string): void {
@@ -603,11 +740,111 @@ function parseSingleFacetFlag(
   return parsed.values[0];
 }
 
-function renderHelp(): string {
+function resolveHelpTarget(parsed: ParsedArgs): HelpTarget {
+  if (parsed.command === "help") {
+    return {
+      command: parsed.positional[0],
+      subcommand: parsed.positional[1],
+    };
+  }
+
+  if (hasFlag(parsed.flags, "help")) {
+    return {
+      command: parsed.command,
+      subcommand: parsed.positional[0],
+    };
+  }
+
+  return {};
+}
+
+function renderHelp(command?: string, subcommand?: string): string {
+  if (command === "search") {
+    return [
+      "byr search",
+      "",
+      "Usage:",
+      "  byr search --query <text> [--limit <n>] [--category <alias|id>] [--incldead <alias|id>] [--spstate <alias|id>] [--bookmarked <alias|id>] [--page <n>] [--json]",
+      "  byr search --imdb <tt-id> [--limit <n>] [--json]",
+    ].join("\n");
+  }
+
+  if (command === "get") {
+    return ["byr get", "", "Usage:", "  byr get --id <torrent-id> [--json]"].join("\n");
+  }
+
+  if (command === "download") {
+    return [
+      "byr download",
+      "",
+      "Usage:",
+      "  byr download --id <torrent-id> --output <path> [--dry-run] [--json]",
+    ].join("\n");
+  }
+
+  if (command === "user") {
+    return ["byr user", "", "Usage:", "  byr user info [--json]"].join("\n");
+  }
+
+  if (command === "meta") {
+    return [
+      "byr meta",
+      "",
+      "Usage:",
+      "  byr meta categories [--json]",
+      "  byr meta levels [--json]",
+    ].join("\n");
+  }
+
+  if (command === "auth") {
+    if (subcommand === "status") {
+      return ["byr auth status", "", "Usage:", "  byr auth status [--verify] [--json]"].join("\n");
+    }
+    if (subcommand === "import-cookie") {
+      return [
+        "byr auth import-cookie",
+        "",
+        "Usage:",
+        '  byr auth import-cookie --cookie "uid=...; pass=..." [--json]',
+        "  byr auth import-cookie --from-browser <chrome|safari> [--profile <name>] [--json]",
+      ].join("\n");
+    }
+    if (subcommand === "logout") {
+      return ["byr auth logout", "", "Usage:", "  byr auth logout [--json]"].join("\n");
+    }
+
+    return [
+      "byr auth",
+      "",
+      "Usage:",
+      "  byr auth status [--verify] [--json]",
+      '  byr auth import-cookie --cookie "uid=...; pass=..." [--json]',
+      "  byr auth import-cookie --from-browser <chrome|safari> [--profile <name>] [--json]",
+      "  byr auth logout [--json]",
+    ].join("\n");
+  }
+
+  if (command === "check") {
+    return ["byr check", "", "Usage:", "  byr check [--json]"].join("\n");
+  }
+
+  if (command === "whoami") {
+    return ["byr whoami", "", "Usage:", "  byr whoami [--json]"].join("\n");
+  }
+
+  if (command === "version") {
+    return ["byr version", "", "Usage:", "  byr version [--json]"].join("\n");
+  }
+
   return [
     "byr CLI",
     "",
     "Usage:",
+    "  byr [--help|-h] [--version|-V]",
+    "  byr help [command]",
+    "  byr version [--json]",
+    "  byr check [--json]",
+    "  byr whoami [--json]",
     "  byr search --query <text> [--limit <n>] [--category <alias|id>] [--incldead <alias|id>] [--spstate <alias|id>] [--bookmarked <alias|id>] [--page <n>] [--json]",
     "  byr search --imdb <tt-id> [--limit <n>] [--json]",
     "  byr get --id <torrent-id> [--json]",
@@ -624,10 +861,28 @@ function renderHelp(): string {
     "  CLI flags > ENV > ./.byrrc.json > ~/.config/byr-cli/config.json > ~/.config/byr-cli/auth.json",
     "",
     "Flags:",
+    "  -h, --help   Show help",
+    "  -V, --version Show CLI version",
     "  --json       Output CliEnvelope JSON",
     "  --dry-run    Validate and show write plan without writing files",
-    "  --verbose    Include verbose mode in metadata",
+    "  -v, --verbose Include verbose mode in metadata",
   ].join("\n");
+}
+
+function loadVersionInfo(): VersionInfo {
+  try {
+    const require = createRequire(import.meta.url);
+    const pkg = require("../package.json") as { name?: string; version?: string };
+    return {
+      name: typeof pkg.name === "string" ? pkg.name : "byr-pt-cli",
+      version: typeof pkg.version === "string" ? pkg.version : "0.0.0",
+    };
+  } catch {
+    return {
+      name: "byr-pt-cli",
+      version: "0.0.0",
+    };
+  }
 }
 
 function createArgumentError(
