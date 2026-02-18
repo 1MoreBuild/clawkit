@@ -11,11 +11,19 @@ metadata:
         "install":
           [
             {
+              "id": "brew",
+              "kind": "brew",
+              "formula": "byr-pt-cli",
+              "tap": "1MoreBuild/tap",
+              "bins": ["byr"],
+              "label": "Install byr CLI (Homebrew)",
+            },
+            {
               "id": "node",
               "kind": "node",
               "package": "byr-pt-cli",
               "bins": ["byr"],
-              "label": "Install byr CLI (npm)",
+              "label": "Install byr CLI (npm fallback)",
             },
           ],
       },
