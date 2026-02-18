@@ -141,7 +141,9 @@ describe("CLI parameter validation", () => {
       stdout,
       stderr,
       fileWriter: async () => {
-        const error = new Error("EISDIR: illegal operation on a directory") as NodeJS.ErrnoException;
+        const error = new Error(
+          "EISDIR: illegal operation on a directory",
+        ) as NodeJS.ErrnoException;
         error.code = "EISDIR";
         throw error;
       },
