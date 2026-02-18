@@ -67,6 +67,7 @@ export interface ByrClientOptions {
 
 const DEFAULT_BASE_URL = "https://byr.pt";
 const DEFAULT_TIMEOUT_MS = 15_000;
+const MAX_AUTO_TORRENT_LIST_PAGES = 30;
 
 export function createByrClientFromEnv(env: NodeJS.ProcessEnv = process.env): ByrClient {
   return createByrClient({
@@ -235,14 +236,77 @@ export function createByrClient(options: ByrClientOptions = {}): ByrClient {
     return secondHtml;
   }
 
+  async function fetchTorrentList(input: {
+    query?: string;
+    limit: number;
+    options: ByrSearchOptions | ByrBrowseOptions;
+  }): Promise<ByrSearchItem[]> {
+    const explicitPage = input.options.page;
+
+    if (explicitPage !== undefined) {
+      const params = buildTorrentListParams({
+        query: input.query,
+        options: input.options,
+      });
+      const html = await fetchAuthenticatedHtml(`/torrents.php?${params.toString()}`);
+      return parseSearchItems(html, input.limit, baseUrl);
+    }
+
+    const items: ByrSearchItem[] = [];
+    const seenIds = new Set<string>();
+
+    for (
+      let pageIndex = 0;
+      pageIndex < MAX_AUTO_TORRENT_LIST_PAGES && items.length < input.limit;
+      pageIndex += 1
+    ) {
+      const pagedOptions: ByrSearchOptions | ByrBrowseOptions = {
+        ...input.options,
+        page: pageIndex === 0 ? undefined : pageIndex,
+      };
+      const params = buildTorrentListParams({
+        query: input.query,
+        options: pagedOptions,
+      });
+      const html = await fetchAuthenticatedHtml(`/torrents.php?${params.toString()}`);
+      const pageItems = parseSearchItems(html, Number.MAX_SAFE_INTEGER, baseUrl);
+
+      if (pageItems.length === 0) {
+        break;
+      }
+
+      let added = 0;
+      for (const item of pageItems) {
+        if (seenIds.has(item.id)) {
+          continue;
+        }
+        seenIds.add(item.id);
+        items.push(item);
+        added += 1;
+
+        if (items.length >= input.limit) {
+          break;
+        }
+      }
+
+      if (added === 0) {
+        break;
+      }
+
+      if (!hasPageLink(html, pageIndex + 1)) {
+        break;
+      }
+    }
+
+    return items.slice(0, input.limit);
+  }
+
   return {
     async browse(limit: number, options: ByrBrowseOptions = {}): Promise<ByrSearchItem[]> {
-      const params = buildTorrentListParams({
+      return fetchTorrentList({
+        limit,
         options,
       });
-
-      const html = await fetchAuthenticatedHtml(`/torrents.php?${params.toString()}`);
-      return parseSearchItems(html, limit, baseUrl);
     },
 
     async search(
@@ -250,13 +314,11 @@ export function createByrClient(options: ByrClientOptions = {}): ByrClient {
       limit: number,
       options: ByrSearchOptions = {},
     ): Promise<ByrSearchItem[]> {
-      const params = buildTorrentListParams({
+      return fetchTorrentList({
+        limit,
         query,
         options,
       });
-
-      const html = await fetchAuthenticatedHtml(`/torrents.php?${params.toString()}`);
-      return parseSearchItems(html, limit, baseUrl);
     },
 
     async getById(id: string): Promise<ByrTorrentDetail> {
@@ -548,6 +610,16 @@ function buildAuthExpiredError(): CliAppError {
     code: "E_AUTH_REQUIRED",
     message: "BYR authentication is required or expired.",
   });
+}
+
+function hasPageLink(html: string, page: number): boolean {
+  if (!Number.isInteger(page) || page < 0) {
+    return false;
+  }
+
+  const normalized = html.replaceAll("&amp;", "&");
+  const pattern = new RegExp(`[?&]page=${page}(?:[&#"'\\s>]|$)`, "i");
+  return pattern.test(normalized);
 }
 
 function looksLikeAuthPage(response: Response, html: string): boolean {

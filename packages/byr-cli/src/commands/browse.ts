@@ -38,7 +38,7 @@ export async function runBrowseCommand(
 }
 
 export function renderBrowseOutput(output: BrowseCommandOutput): string {
-  const lines: string[] = ["Browse: latest", `Matched: ${output.total}`];
+  const lines: string[] = ["Browse: latest", `Returned: ${output.total}`];
 
   for (const item of output.items) {
     lines.push(

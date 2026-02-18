@@ -53,7 +53,7 @@ export async function runSearchCommand(
 
 export function renderSearchOutput(output: SearchCommandOutput): string {
   const searchText = output.imdb ? `imdb:${output.imdb}` : output.query;
-  const lines: string[] = [`Search: ${searchText}`, `Matched: ${output.total}`];
+  const lines: string[] = [`Search: ${searchText}`, `Returned: ${output.total}`];
 
   for (const item of output.items) {
     lines.push(

@@ -196,6 +196,74 @@ describe("real BYR upstream client", () => {
     expect(searchCall?.headers.get("cookie")).toContain("pass=abc123");
   });
 
+  it("auto-paginates search when --page is not specified", async () => {
+    const createSearchHtml = (ids: string[], nextPage?: number): string => {
+      const rows = ids
+        .map(
+          (id, index) => `
+          <tr>
+            <td><a href="details.php?id=${id}">[Movie] Item ${id}</a></td>
+            <td>${index + 1}.0 GB</td>
+            <td><a href="seeders.php?id=${id}">${10 - index}</a></td>
+            <td><a href="leechers.php?id=${id}">${index}</a></td>
+          </tr>
+        `,
+        )
+        .join("");
+
+      const pager =
+        nextPage === undefined ? "" : `<div class="pagenum"><a href="torrents.php?page=${nextPage}">next</a></div>`;
+
+      return `
+        <html>
+          <body>
+            ${pager}
+            <table class="torrents">
+              <tr>
+                <th>标题</th>
+                <th>大小</th>
+                <th>做种</th>
+                <th>下载</th>
+              </tr>
+              ${rows}
+            </table>
+          </body>
+        </html>
+      `;
+    };
+
+    const { fetchImpl, calls } = createMockFetch(async (request) => {
+      if (request.url.pathname === "/torrents.php") {
+        const page = request.url.searchParams.get("page");
+        if (page === null) {
+          return new Response(createSearchHtml(["1001", "1002"], 1), {
+            status: 200,
+            headers: { "content-type": "text/html" },
+          });
+        }
+        if (page === "1") {
+          return new Response(createSearchHtml(["1003"]), {
+            status: 200,
+            headers: { "content-type": "text/html" },
+          });
+        }
+      }
+      return new Response("Not found", { status: 404 });
+    });
+
+    const client = createByrClient({
+      fetchImpl,
+      baseUrl: "https://byr.pt",
+      cookie: "uid=abc; pass=def",
+    });
+
+    const items = await client.search("item", 3);
+    expect(items.map((item) => item.id)).toEqual(["1001", "1002", "1003"]);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.url.searchParams.get("page")).toBeNull();
+    expect(calls[1]?.url.searchParams.get("page")).toBe("1");
+  });
+
   it("builds plan and downloads torrent payload", async () => {
     const detailHtml = `
       <html>

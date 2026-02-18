@@ -10,6 +10,19 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 - (no unreleased entries yet)
 
+## [0.1.10] - 2026-02-18
+
+### Fixed
+
+- `search`/`browse` now auto-fetch subsequent BYR pages when `--page` is not specified, so large limits return more than a single-page cap.
+- Preserved explicit-page behavior: when `--page` is provided, only that page is fetched.
+
+### Changed
+
+- Increased default `--limit` for `search` and `browse` from 10 to 50.
+- Human output label changed from `Matched` to `Returned` to avoid implying full-site hit count.
+- Updated help text for `search` and `browse` to document pagination behavior and new defaults.
+
 ## [0.1.9] - 2026-02-18
 
 ### Fixed

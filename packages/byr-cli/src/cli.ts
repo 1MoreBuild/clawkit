@@ -88,6 +88,7 @@ const SHORT_FLAG_ALIASES: Record<string, string> = {
 };
 
 const CLI_VERSION = loadVersionInfo();
+const DEFAULT_LIST_LIMIT = 50;
 
 export async function runCli(argv: string[], deps: ByrCliDeps = {}): Promise<number> {
   const stdout = deps.stdout ?? process.stdout;
@@ -245,7 +246,7 @@ async function dispatch(parsed: ParsedArgs, deps: DispatchDeps): Promise<Dispatc
 async function dispatchSearch(parsed: ParsedArgs, deps: DispatchDeps): Promise<DispatchResult> {
   const query = getOptionalString(parsed.flags, "query") ?? "";
   const imdb = getOptionalString(parsed.flags, "imdb");
-  const limit = getPositiveInteger(parsed.flags, "limit", 10);
+  const limit = getPositiveInteger(parsed.flags, "limit", DEFAULT_LIST_LIMIT);
 
   if (query.trim().length === 0 && (imdb === undefined || imdb.trim().length === 0)) {
     throw createArgumentError("E_ARG_MISSING", "--query or --imdb is required", {
@@ -295,7 +296,7 @@ async function dispatchSearch(parsed: ParsedArgs, deps: DispatchDeps): Promise<D
 }
 
 async function dispatchBrowse(parsed: ParsedArgs, deps: DispatchDeps): Promise<DispatchResult> {
-  const limit = getPositiveInteger(parsed.flags, "limit", 10);
+  const limit = getPositiveInteger(parsed.flags, "limit", DEFAULT_LIST_LIMIT);
 
   if (hasFlag(parsed.flags, "query") || hasFlag(parsed.flags, "imdb")) {
     throw createArgumentError("E_ARG_UNSUPPORTED", "browse does not support --query or --imdb", {
@@ -933,8 +934,11 @@ function renderHelp(command?: string, subcommand?: string): string {
       "byr search",
       "",
       "Usage:",
-      "  byr search --query <text> [--limit <n>] [--category <alias|id>] [--incldead <alias|id>] [--spstate <alias|id>] [--bookmarked <alias|id>] [--page <n>] [--json]",
-      "  byr search --imdb <tt-id> [--limit <n>] [--json]",
+      "  byr search --query <text> [--limit <n, default 50>] [--category <alias|id>] [--incldead <alias|id>] [--spstate <alias|id>] [--bookmarked <alias|id>] [--page <n>] [--json]",
+      "  byr search --imdb <tt-id> [--limit <n, default 50>] [--json]",
+      "Notes:",
+      "  --page omitted: auto-fetches subsequent pages until --limit is reached.",
+      "  --page specified: fetches only that page.",
     ].join("\n");
   }
 
@@ -956,7 +960,10 @@ function renderHelp(command?: string, subcommand?: string): string {
       "byr browse",
       "",
       "Usage:",
-      "  byr browse [--limit <n>] [--category <alias|id>] [--incldead <alias|id>] [--spstate <alias|id>] [--bookmarked <alias|id>] [--page <n>] [--json]",
+      "  byr browse [--limit <n, default 50>] [--category <alias|id>] [--incldead <alias|id>] [--spstate <alias|id>] [--bookmarked <alias|id>] [--page <n>] [--json]",
+      "Notes:",
+      "  --page omitted: auto-fetches subsequent pages until --limit is reached.",
+      "  --page specified: fetches only that page.",
     ].join("\n");
   }
 
@@ -1036,9 +1043,9 @@ function renderHelp(command?: string, subcommand?: string): string {
     "  byr version [--json]",
     "  byr check [--json]",
     "  byr whoami [--json]",
-    "  byr browse [--limit <n>] [--category <alias|id>] [--incldead <alias|id>] [--spstate <alias|id>] [--bookmarked <alias|id>] [--page <n>] [--json]",
-    "  byr search --query <text> [--limit <n>] [--category <alias|id>] [--incldead <alias|id>] [--spstate <alias|id>] [--bookmarked <alias|id>] [--page <n>] [--json]",
-    "  byr search --imdb <tt-id> [--limit <n>] [--json]",
+    "  byr browse [--limit <n, default 50>] [--category <alias|id>] [--incldead <alias|id>] [--spstate <alias|id>] [--bookmarked <alias|id>] [--page <n>] [--json]",
+    "  byr search --query <text> [--limit <n, default 50>] [--category <alias|id>] [--incldead <alias|id>] [--spstate <alias|id>] [--bookmarked <alias|id>] [--page <n>] [--json]",
+    "  byr search --imdb <tt-id> [--limit <n, default 50>] [--json]",
     "  byr get --id <torrent-id> [--json]",
     "  byr download --id <torrent-id> --output <path> [--dry-run] [--json]",
     "  byr doctor [--verify] [--json]",
