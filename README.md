@@ -61,11 +61,25 @@ docs/
 
 ## Publishing
 
-Publish npm package:
+Release is tag-driven and publishes both npm + Homebrew tap from CI:
 
 ```bash
-pnpm --filter byr-pt-cli publish --access public
+git tag v0.1.6
+git push origin v0.1.6
 ```
+
+Required GitHub Actions secrets:
+
+- `NPM_TOKEN`: npm publish token for `byr-pt-cli`
+- `HOMEBREW_TAP_TOKEN`: token with push access to `1MoreBuild/homebrew-tap`
+
+Workflow file:
+
+- `.github/workflows/release.yml`
+
+Formula update helper:
+
+- `scripts/update-homebrew-formula.mjs`
 
 Skill publish workflow is documented in:
 

@@ -1,0 +1,144 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.1.5)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      PACKAGE_NAME: byr-pt-cli
+      PACKAGE_DIR: packages/byr-cli
+      TAP_REPOSITORY: 1MoreBuild/homebrew-tap
+      TAP_FORMULA_PATH: Formula/byr-pt-cli.rb
+      TAP_BRANCH: main
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout selected tag
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          git fetch --tags --force
+          git checkout "${{ inputs.tag }}"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.23.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Resolve release version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            RELEASE_TAG="${{ inputs.tag }}"
+          else
+            RELEASE_TAG="${GITHUB_REF_NAME}"
+          fi
+
+          if ! echo "${RELEASE_TAG}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
+            echo "Invalid tag format: ${RELEASE_TAG}"
+            exit 1
+          fi
+
+          RELEASE_VERSION="${RELEASE_TAG#v}"
+          PACKAGE_VERSION="$(node -e "const fs=require('node:fs');const p=JSON.parse(fs.readFileSync('${PACKAGE_DIR}/package.json','utf8'));process.stdout.write(p.version)")"
+
+          if [ "${PACKAGE_VERSION}" != "${RELEASE_VERSION}" ]; then
+            echo "Tag version (${RELEASE_VERSION}) does not match ${PACKAGE_DIR}/package.json (${PACKAGE_VERSION})"
+            exit 1
+          fi
+
+          echo "RELEASE_TAG=${RELEASE_TAG}" >> "${GITHUB_ENV}"
+          echo "RELEASE_VERSION=${RELEASE_VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run quality checks
+        run: |
+          pnpm check
+          pnpm --filter "${PACKAGE_NAME}" build
+
+      - name: Publish npm package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if npm view "${PACKAGE_NAME}@${RELEASE_VERSION}" version >/dev/null 2>&1; then
+            echo "${PACKAGE_NAME}@${RELEASE_VERSION} already published, skip npm publish."
+          else
+            pnpm --filter "${PACKAGE_NAME}" publish --access public --no-git-checks
+          fi
+
+      - name: Wait for npm registry visibility
+        run: |
+          for attempt in $(seq 1 30); do
+            if npm view "${PACKAGE_NAME}@${RELEASE_VERSION}" version >/dev/null 2>&1; then
+              echo "npm registry is ready."
+              exit 0
+            fi
+            echo "Waiting for npm propagation (${attempt}/30)..."
+            sleep 5
+          done
+          echo "Timed out waiting for npm registry visibility."
+          exit 1
+
+      - name: Resolve npm tarball checksum
+        run: |
+          TARBALL_URL="$(npm view "${PACKAGE_NAME}@${RELEASE_VERSION}" dist.tarball)"
+          curl -fsSL "${TARBALL_URL}" -o package.tgz
+          TARBALL_SHA256="$(shasum -a 256 package.tgz | awk '{print $1}')"
+
+          echo "TARBALL_URL=${TARBALL_URL}" >> "${GITHUB_ENV}"
+          echo "TARBALL_SHA256=${TARBALL_SHA256}" >> "${GITHUB_ENV}"
+
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TAP_REPOSITORY }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+          fetch-depth: 0
+
+      - name: Update formula
+        run: |
+          node ./scripts/update-homebrew-formula.mjs \
+            --formula "./homebrew-tap/${TAP_FORMULA_PATH}" \
+            --version "${RELEASE_VERSION}" \
+            --url "${TARBALL_URL}" \
+            --sha256 "${TARBALL_SHA256}"
+
+      - name: Commit and push formula update
+        run: |
+          cd homebrew-tap
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- "${TAP_FORMULA_PATH}"; then
+            echo "Formula already up to date."
+            exit 0
+          fi
+
+          git add "${TAP_FORMULA_PATH}"
+          git commit -m "${PACKAGE_NAME} ${RELEASE_VERSION}"
+          git push origin "HEAD:${TAP_BRANCH}"
