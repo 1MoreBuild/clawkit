@@ -1,0 +1,25 @@
+{
+  "name": "@onemoreproduct/cli-core",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Shared CLI contracts and helpers for clawkit packages",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --dts",
+    "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "check": "pnpm typecheck && pnpm test"
+  }
+}
