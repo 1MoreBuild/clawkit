@@ -26,10 +26,18 @@ Run BYR CLI locally from the workspace:
 pnpm byr:dev -- help
 ```
 
-Install published CLI globally:
+Install published CLI globally (macOS recommended):
 
 ```bash
-npm i -g byr-pt-cli
+brew tap 1MoreBuild/tap
+brew install byr-pt-cli
+byr help
+```
+
+Cross-platform fallback:
+
+```bash
+npm install -g byr-pt-cli
 byr help
 ```
 
@@ -44,6 +52,12 @@ which -a byr
 
 # Smoke test install from local tarball (temporary npm prefix, no global pollution)
 pnpm byr:smoke-install
+```
+
+Avoid installing both Homebrew and npm global versions at the same time:
+
+```bash
+which -a byr
 ```
 
 ## Common Commands
