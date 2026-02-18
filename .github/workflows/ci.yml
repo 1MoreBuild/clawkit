@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.23.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Quality gate
+        run: pnpm check
+
+      - name: Build CLI package
+        run: pnpm --filter byr-pt-cli build
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install detect-secrets
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install detect-secrets==1.5.0
+
+      - name: Verify detect-secrets baseline
+        run: |
+          set -euo pipefail
+          tmp_baseline="$(mktemp)"
+
+          git ls-files -z | xargs -0 python -m detect_secrets scan \
+            --exclude-files '(^|/)pnpm-lock\.yaml$' \
+            --exclude-files '(^|/)\.secrets\.baseline$' \
+            --exclude-files '(^|/)\.detect-secrets\.cfg$' \
+            > "${tmp_baseline}"
+
+          if ! python scripts/check-secrets-baseline.py .secrets.baseline "${tmp_baseline}"; then
+            echo "::error::detect-secrets baseline mismatch. Run baseline refresh locally."
+            exit 1
+          fi

@@ -6,11 +6,12 @@ This document is the operational guide for publishing npm + Homebrew in one flow
 
 Release is tag-driven via GitHub Actions:
 
-1. Verify version in `packages/byr-cli/package.json`.
-2. Push tag:
+1. Update `CHANGELOG.md` with `X.Y.Z` release notes.
+2. Verify version in `packages/byr-cli/package.json`.
+3. Push tag:
    - `git tag vX.Y.Z`
    - `git push origin vX.Y.Z`
-3. Watch workflow: `.github/workflows/release.yml`.
+4. Watch workflow: `.github/workflows/release.yml`.
 
 ## What CI Does
 

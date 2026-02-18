@@ -46,6 +46,9 @@ pnpm --filter byr-pt-cli check
 
 # BYR live smoke (local only, requires valid credentials)
 BYR_LIVE=1 BYR_COOKIE='uid=...; pass=...' pnpm --filter byr-pt-cli test:live
+
+# Refresh detect-secrets baseline after intentional test-fixture changes
+./scripts/refresh-secrets-baseline.sh
 ```
 
 ## Repository Layout
@@ -55,6 +58,7 @@ packages/
   cli-core/
   byr-cli/
 docs/
+  release-playbook.md
   monorepo-conventions.md
   skill-publish.md
 ```
@@ -80,6 +84,7 @@ Workflow file:
 Formula update helper:
 
 - `scripts/update-homebrew-formula.mjs`
+- `CHANGELOG.md`
 
 Skill publish workflow is documented in:
 
