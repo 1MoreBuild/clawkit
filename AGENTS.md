@@ -4,6 +4,12 @@
 
 Use `.github/workflows/release.yml` as the canonical release pipeline for `byr-pt-cli`.
 
+## Release Skill
+
+Reusable release instructions are also available in:
+
+- `/Users/bytedance/Projects/clawkit/.agents/skills/release-byr-cli/SKILL.md`
+
 ## How To Release
 
 1. Ensure `/Users/bytedance/Projects/clawkit/packages/byr-cli/package.json` version is the target version.

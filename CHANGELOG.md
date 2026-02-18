@@ -10,6 +10,18 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 - (no unreleased entries yet)
 
+## [0.1.6] - 2026-02-18
+
+### Fixed
+
+- Browser cookie import: sanitized non-ASCII and malformed cookie values before persistence.
+- Chrome import: stripped host digest prefix from decrypted cookie payloads to prevent binary garbage in `session_id` / `auth_token`.
+- Auth handling: invalid persisted cookie values now return `E_AUTH_INVALID` instead of low-level ByteString errors.
+
+### Changed
+
+- Strengthened auth/browser import tests and isolated CLI tests from local `~/.config/byr-cli` state.
+
 ## [0.1.5] - 2026-02-18
 
 ### Added
