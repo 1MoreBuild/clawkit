@@ -1,3 +1,7 @@
+import { mkdtempSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { afterEach, describe, expect, it } from "vitest";
 
 import { runCli } from "../src/cli.js";
@@ -23,8 +27,15 @@ const ORIGINAL_ENV = {
   BYR_BASE_URL: process.env.BYR_BASE_URL,
   BYR_TIMEOUT_MS: process.env.BYR_TIMEOUT_MS,
 };
+const ORIGINAL_HOME = process.env.HOME;
 
 afterEach(() => {
+  if (ORIGINAL_HOME === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = ORIGINAL_HOME;
+  }
+
   for (const [key, value] of Object.entries(ORIGINAL_ENV)) {
     if (value === undefined) {
       delete process.env[key as keyof typeof ORIGINAL_ENV];
@@ -34,8 +45,16 @@ afterEach(() => {
   }
 });
 
+function isolateHome(): void {
+  const root = mkdtempSync(join(tmpdir(), "byr-cli-global-"));
+  const homeDir = join(root, "home");
+  mkdirSync(homeDir, { recursive: true });
+  process.env.HOME = homeDir;
+}
+
 describe("CLI global behavior", () => {
   it("supports global help flags and command-level help", async () => {
+    isolateHome();
     const stdout = new BufferWriter();
     const stderr = new BufferWriter();
 
@@ -72,6 +91,7 @@ describe("CLI global behavior", () => {
   });
 
   it("supports version output via --version/-V/version", async () => {
+    isolateHome();
     const stdout = new BufferWriter();
     const stderr = new BufferWriter();
 
@@ -104,6 +124,7 @@ describe("CLI global behavior", () => {
   });
 
   it("supports bird-like check and whoami commands", async () => {
+    isolateHome();
     const stdout = new BufferWriter();
     const stderr = new BufferWriter();
 

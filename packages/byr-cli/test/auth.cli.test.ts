@@ -211,6 +211,28 @@ describe("auth command flow", () => {
     });
   });
 
+  it("rejects cookie import with invalid characters", async () => {
+    isolateHome();
+    const stdout = new BufferWriter();
+    const stderr = new BufferWriter();
+
+    const importCode = await runCli(
+      ["auth", "import-cookie", "--cookie", "session_id=bad\uFFFDtoken; auth_token=ok", "--json"],
+      {
+        stdout,
+        stderr,
+      },
+    );
+
+    expect(importCode).toBe(3);
+    expect(JSON.parse(stdout.read())).toMatchObject({
+      ok: false,
+      error: {
+        code: "E_AUTH_INVALID",
+      },
+    });
+  });
+
   it("supports auth login with credentials and persists cookie", async () => {
     isolateHome();
     const stdout = new BufferWriter();

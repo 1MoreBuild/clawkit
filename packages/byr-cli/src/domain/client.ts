@@ -9,6 +9,7 @@ import {
   guessByrLevelId,
   getByrMetadata,
 } from "./byr-metadata.js";
+import { validateByrCookie } from "./auth/store.js";
 import { mapNonOkResponse, HttpSession } from "./http/session.js";
 import {
   extractDownloadUrl,
@@ -93,6 +94,10 @@ function parseTimeoutMs(value: string | undefined): number | undefined {
 export function createByrClient(options: ByrClientOptions = {}): ByrClient {
   const baseUrl = normalizeBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
   const timeoutMs = sanitizeTimeout(options.timeoutMs);
+  const cookie = options.cookie?.trim();
+  if (cookie && cookie.length > 0) {
+    validateByrCookie(cookie);
+  }
   const username = options.username?.trim() ?? "";
   const password = options.password ?? "";
 
@@ -100,7 +105,7 @@ export function createByrClient(options: ByrClientOptions = {}): ByrClient {
     baseUrl,
     timeoutMs,
     fetchImpl: options.fetchImpl,
-    initialCookie: options.cookie,
+    initialCookie: cookie,
     userAgent: "byr-pt-cli",
   });
 

@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, readFileSync, rmSync, statSync } from "node:fs";
+import { createCipheriv, createHash, pbkdf2Sync } from "node:crypto";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -118,6 +119,57 @@ describe("browser cookie import", () => {
     expect(rmSyncMock).toHaveBeenCalled();
   });
 
+  it("strips Chrome host digest prefix from decrypted session cookies", async () => {
+    setPlatform("darwin");
+    process.env.HOME = "/Users/mock";
+
+    existsSyncMock.mockImplementation((path) => String(path).endsWith("/Default/Cookies"));
+    copyFileSyncMock.mockImplementation(() => undefined);
+
+    const host = ".byr.pt";
+    const password = "mock-safe-storage-password";
+    const sessionIdHex = encryptChromeCookieWithHostDigest("ee6d-session-id", host, password);
+    const authTokenHex = encryptChromeCookieWithHostDigest("ey.mock.jwt.token", host, password);
+    const refreshTokenHex = encryptChromeCookieWithHostDigest(
+      "refresh-token-value",
+      host,
+      password,
+    );
+
+    spawnSyncMock.mockImplementation((command) => {
+      if (command === "mkdir") {
+        return { status: 0, stdout: "", stderr: "" } as never;
+      }
+      if (command === "sqlite3") {
+        return {
+          status: 0,
+          stdout:
+            `session_id\t\t${sessionIdHex}\t${host}\n` +
+            `auth_token\t\t${authTokenHex}\t${host}\n` +
+            `refresh_token\t\t${refreshTokenHex}\t${host}\n`,
+          stderr: "",
+        } as never;
+      }
+      if (command === "security") {
+        return {
+          status: 0,
+          stdout: `${password}\n`,
+          stderr: "",
+        } as never;
+      }
+
+      return { status: 1, stdout: "", stderr: "unsupported" } as never;
+    });
+
+    const imported = await importCookieFromBrowser("chrome");
+
+    expect(imported).toMatchObject({
+      cookie:
+        "session_id=ee6d-session-id; auth_token=ey.mock.jwt.token; refresh_token=refresh-token-value",
+      source: "chrome:Default",
+    });
+  });
+
   it("returns actionable error when Safari import cannot locate cookies", async () => {
     setPlatform("darwin");
     process.env.HOME = "/Users/mock";
@@ -178,3 +230,13 @@ describe("browser cookie import", () => {
     expect(imported.source).toContain("safari-sqlite");
   });
 });
+
+function encryptChromeCookieWithHostDigest(value: string, host: string, password: string): string {
+  const key = pbkdf2Sync(password, "saltysalt", 1003, 16, "sha1");
+  const iv = Buffer.alloc(16, 0x20);
+  const hostDigest = createHash("sha256").update(host).digest();
+  const plain = Buffer.concat([hostDigest, Buffer.from(value, "utf8")]);
+  const cipher = createCipheriv("aes-128-cbc", key, iv);
+  const encrypted = Buffer.concat([cipher.update(plain), cipher.final()]);
+  return Buffer.concat([Buffer.from("v10", "utf8"), encrypted]).toString("hex");
+}

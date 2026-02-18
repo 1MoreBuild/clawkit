@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pbkdf2Sync, createDecipheriv } from "node:crypto";
+import { pbkdf2Sync, createDecipheriv, createHash } from "node:crypto";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 
@@ -74,7 +74,7 @@ function importCookieFromChrome(profile?: string): BrowserCookieImportResult {
 
   try {
     const query =
-      "SELECT name, value, hex(encrypted_value) FROM cookies " +
+      "SELECT name, value, hex(encrypted_value), host_key FROM cookies " +
       "WHERE host_key IN ('.byr.pt','byr.pt','.bt.byr.cn','bt.byr.cn') " +
       "AND name IN ('uid','pass','session_id','auth_token','refresh_token')";
 
@@ -100,12 +100,14 @@ function importCookieFromChrome(profile?: string): BrowserCookieImportResult {
     let keyHex: string | undefined;
 
     for (const line of lines) {
-      const [name, value, encryptedHex] = line.split("\t");
+      const [name, value = "", encryptedHex = "", hostKey = ""] = line.split("\t");
       if (!AUTH_COOKIE_NAMES.has(name)) {
         continue;
       }
-      if (value && value.length > 0) {
-        cookies.set(name, value);
+
+      const normalized = normalizeCookieValue(value);
+      if (normalized) {
+        cookies.set(name, normalized);
         continue;
       }
       if (!keyHex) {
@@ -114,7 +116,7 @@ function importCookieFromChrome(profile?: string): BrowserCookieImportResult {
       if (!encryptedHex || encryptedHex.length === 0 || !keyHex) {
         continue;
       }
-      const resolved = decryptChromeCookieHex(encryptedHex, keyHex);
+      const resolved = decryptChromeCookieHex(encryptedHex, keyHex, hostKey);
       if (resolved) {
         cookies.set(name, resolved);
       }
@@ -162,22 +164,37 @@ function getChromeSafeStorageKeyHex(): string | undefined {
   return undefined;
 }
 
-function decryptChromeCookieHex(encryptedHex: string, keyHex: string): string | undefined {
+function decryptChromeCookieHex(
+  encryptedHex: string,
+  keyHex: string,
+  hostKey?: string,
+): string | undefined {
   try {
     let encrypted = Buffer.from(encryptedHex, "hex");
     if (encrypted.length === 0) {
       return undefined;
     }
 
-    if (encrypted.subarray(0, 3).toString("utf8") === "v10") {
+    const version = encrypted.subarray(0, 3).toString("utf8");
+    if (version === "v10" || version === "v11") {
       encrypted = encrypted.subarray(3);
     }
 
     const key = Buffer.from(keyHex, "hex");
     const iv = Buffer.alloc(16, 0x20);
     const decipher = createDecipheriv("aes-128-cbc", key, iv);
-    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-    return decrypted.toString("utf8").replaceAll("\u0000", "").trim();
+    let decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+
+    const normalizedHostKey = hostKey?.trim();
+    if (normalizedHostKey && decrypted.length > 32) {
+      const digest = createHash("sha256").update(normalizedHostKey).digest();
+      if (decrypted.subarray(0, 32).equals(digest)) {
+        decrypted = decrypted.subarray(32);
+      }
+    }
+
+    const decoded = decrypted.toString("utf8").replaceAll("\u0000", "").trim();
+    return normalizeCookieValue(decoded);
   } catch {
     return undefined;
   }
@@ -297,7 +314,10 @@ function extractByrCookie(
       continue;
     }
     if (AUTH_COOKIE_NAMES.has(record.name)) {
-      map.set(record.name, record.value);
+      const normalized = normalizeCookieValue(record.value);
+      if (normalized) {
+        map.set(record.name, normalized);
+      }
     }
   }
 
@@ -346,6 +366,25 @@ function buildByrAuthCookieHeader(
       ],
     },
   });
+}
+
+function normalizeCookieValue(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+
+  for (const char of trimmed) {
+    const code = char.charCodeAt(0);
+    if (code < 0x21 || code > 0x7e) {
+      return undefined;
+    }
+    if (char === ";" || char === ",") {
+      return undefined;
+    }
+  }
+
+  return trimmed;
 }
 
 function parseBinaryCookies(buffer: Buffer): CookieRecord[] {

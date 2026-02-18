@@ -1,3 +1,7 @@
+import { mkdtempSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { afterEach, describe, expect, it } from "vitest";
 
 import { runCli } from "../src/cli.js";
@@ -19,8 +23,15 @@ class BufferWriter {
 const ORIGINAL_ENV = {
   BYR_COOKIE: process.env.BYR_COOKIE,
 };
+const ORIGINAL_HOME = process.env.HOME;
 
 afterEach(() => {
+  if (ORIGINAL_HOME === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = ORIGINAL_HOME;
+  }
+
   for (const [key, value] of Object.entries(ORIGINAL_ENV)) {
     if (value === undefined) {
       delete process.env[key as keyof typeof ORIGINAL_ENV];
@@ -30,8 +41,16 @@ afterEach(() => {
   }
 });
 
+function isolateHome(): void {
+  const root = mkdtempSync(join(tmpdir(), "byr-cli-doctor-"));
+  const homeDir = join(root, "home");
+  mkdirSync(homeDir, { recursive: true });
+  process.env.HOME = homeDir;
+}
+
 describe("browse and doctor commands", () => {
   it("returns browse output with JSON envelope", async () => {
+    isolateHome();
     const stdout = new BufferWriter();
     const stderr = new BufferWriter();
 
@@ -53,6 +72,7 @@ describe("browse and doctor commands", () => {
   });
 
   it("returns doctor report with warnings in default mode", async () => {
+    isolateHome();
     delete process.env.BYR_COOKIE;
     const stdout = new BufferWriter();
     const stderr = new BufferWriter();
@@ -78,6 +98,7 @@ describe("browse and doctor commands", () => {
   });
 
   it("fails doctor --verify when online verification fails", async () => {
+    isolateHome();
     process.env.BYR_COOKIE = "uid=doctor; pass=doctor";
     const stdout = new BufferWriter();
     const stderr = new BufferWriter();

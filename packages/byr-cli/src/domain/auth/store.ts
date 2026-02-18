@@ -175,7 +175,39 @@ export function validateByrCookie(cookieHeader: string): ParsedCookieInfo {
     });
   }
 
+  for (const [name, value] of parsed.cookieMap.entries()) {
+    const reason = getInvalidCookieValueReason(value);
+    if (reason !== undefined) {
+      throw new CliAppError({
+        code: "E_AUTH_INVALID",
+        message: `Invalid cookie value for ${name}`,
+        details: {
+          cookieName: name,
+          reason,
+        },
+      });
+    }
+  }
+
   return parsed;
+}
+
+function getInvalidCookieValueReason(value: string): string | undefined {
+  if (value.trim().length === 0) {
+    return "empty";
+  }
+
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if (code < 0x21 || code > 0x7e) {
+      return `non-ascii-character:${code}`;
+    }
+    if (char === ";" || char === ",") {
+      return `reserved-character:${char}`;
+    }
+  }
+
+  return undefined;
 }
 
 export function maskCookieValue(value: string, visible = 4): string {
