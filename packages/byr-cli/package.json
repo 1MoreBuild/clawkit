@@ -1,6 +1,6 @@
 {
   "name": "byr-pt-cli",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": false,
   "description": "BYR CLI with OpenClaw-friendly JSON contract",
   "license": "MIT",

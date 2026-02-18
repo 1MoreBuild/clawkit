@@ -68,14 +68,15 @@ docs/
 Release is tag-driven and publishes both npm + Homebrew tap from CI:
 
 ```bash
-git tag v0.1.6
-git push origin v0.1.6
+git tag v0.1.7
+git push origin v0.1.7
 ```
 
 Required GitHub Actions secrets:
 
-- `NPM_TOKEN`: npm publish token for `byr-pt-cli`
 - `HOMEBREW_TAP_TOKEN`: token with push access to `1MoreBuild/homebrew-tap`
+
+npm publish uses OIDC trusted publishing (`id-token: write` + `npm publish --provenance`), so no `NPM_TOKEN` secret is needed.
 
 Workflow file:
 

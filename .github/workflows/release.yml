@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   release:
@@ -81,13 +82,14 @@ jobs:
           pnpm --filter "${PACKAGE_NAME}" build
 
       - name: Publish npm package
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if npm view "${PACKAGE_NAME}@${RELEASE_VERSION}" version >/dev/null 2>&1; then
             echo "${PACKAGE_NAME}@${RELEASE_VERSION} already published, skip npm publish."
           else
-            pnpm --filter "${PACKAGE_NAME}" publish --access public --no-git-checks
+            (
+              cd "${PACKAGE_DIR}"
+              npm publish --provenance --access public
+            )
           fi
 
       - name: Wait for npm registry visibility

@@ -21,8 +21,9 @@ Reusable release instructions are also available in:
 
 ## Required Secrets (GitHub Actions)
 
-- `NPM_TOKEN`: npm publish token for `byr-pt-cli`
 - `HOMEBREW_TAP_TOKEN`: token that can push to `1MoreBuild/homebrew-tap`
+
+npm publish uses OIDC trusted publishing (no `NPM_TOKEN` secret required).
 
 ## Workflow Behavior
 

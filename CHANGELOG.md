@@ -10,6 +10,14 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 - (no unreleased entries yet)
 
+## [0.1.7] - 2026-02-18
+
+### Changed
+
+- Release pipeline switched npm publishing to OIDC trusted publishing (`id-token: write` + `npm publish --provenance --access public`).
+- Removed long-lived `NPM_TOKEN` dependency from CI release path; Homebrew sync remains token-based via `HOMEBREW_TAP_TOKEN`.
+- Updated release docs/playbook to reflect tag-driven OIDC + Homebrew one-pass workflow.
+
 ## [0.1.6] - 2026-02-18
 
 ### Fixed

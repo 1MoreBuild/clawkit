@@ -19,7 +19,7 @@ Release is tag-driven via GitHub Actions:
    - `pnpm check`
    - `pnpm --filter byr-pt-cli build`
 2. Publishes npm package:
-   - `pnpm --filter byr-pt-cli publish --access public --no-git-checks`
+   - `npm publish --provenance --access public` (inside `packages/byr-cli`)
 3. Waits until `npm view byr-pt-cli@X.Y.Z version` is available.
 4. Downloads npm tarball and computes SHA256.
 5. Checks out `1MoreBuild/homebrew-tap`.
@@ -29,8 +29,9 @@ Release is tag-driven via GitHub Actions:
 
 ## Required Repository Secrets
 
-- `NPM_TOKEN`
 - `HOMEBREW_TAP_TOKEN`
+
+Also required for npm publish: GitHub Actions OIDC permission (`permissions: id-token: write`) and npm Trusted Publisher binding for this repo/workflow.
 
 ## Failure Recovery
 
