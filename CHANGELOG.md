@@ -10,6 +10,16 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 - (no unreleased entries yet)
 
+## [0.1.8] - 2026-02-18
+
+### Fixed
+
+- Replaced published dependency range `clawkit-cli-core=workspace:^0.1.0` with npm-compatible semver `^0.1.0`, fixing `npm i -g byr-pt-cli` and Homebrew install failures (`EUNSUPPORTEDPROTOCOL`).
+
+### Changed
+
+- Added publish-manifest guard (`check:publish-manifest`) to fail checks when any published dependency uses `workspace:` protocol.
+
 ## [0.1.7] - 2026-02-18
 
 ### Changed
