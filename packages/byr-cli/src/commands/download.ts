@@ -7,6 +7,7 @@ export interface DownloadCommandInput {
   outputPath: string;
   dryRun: boolean;
   writeFile: (path: string, content: Uint8Array) => Promise<void>;
+  resolveOutputPath?: (path: string, fileName: string) => Promise<string>;
 }
 
 export interface DownloadCommandOutput {
@@ -38,11 +39,15 @@ export async function runDownloadCommand(
     });
   }
 
+  const resolveOutputPath =
+    input.resolveOutputPath ?? (async (path: string, _fileName: string) => path);
+
   if (input.dryRun) {
     const plan = await client.getDownloadPlan(input.id);
+    const outputPath = await resolveOutputPath(input.outputPath, plan.fileName);
     return {
       id: plan.id,
-      outputPath: input.outputPath,
+      outputPath,
       fileName: plan.fileName,
       sourceUrl: plan.sourceUrl,
       dryRun: true,
@@ -51,11 +56,25 @@ export async function runDownloadCommand(
   }
 
   const payload = await client.downloadTorrent(input.id);
-  await input.writeFile(input.outputPath, payload.content);
+  const outputPath = await resolveOutputPath(input.outputPath, payload.fileName);
+
+  try {
+    await input.writeFile(outputPath, payload.content);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError?.code === "EISDIR") {
+      throw new CliAppError({
+        code: "E_ARG_INVALID",
+        message: "--output must be a file path, not a directory",
+        details: { arg: "output", outputPath },
+      });
+    }
+    throw error;
+  }
 
   return {
     id: payload.id,
-    outputPath: input.outputPath,
+    outputPath,
     fileName: payload.fileName,
     sourceUrl: payload.sourceUrl,
     dryRun: false,

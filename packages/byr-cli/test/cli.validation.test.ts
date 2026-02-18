@@ -131,4 +131,30 @@ describe("CLI parameter validation", () => {
     expect(exitCode).toBe(4);
     expect(stderr.read()).toContain("E_NOT_FOUND_RESOURCE");
   });
+
+  it("returns clear validation error when writer raises EISDIR", async () => {
+    const stdout = new BufferWriter();
+    const stderr = new BufferWriter();
+
+    const exitCode = await runCli(["download", "--id", "1001", "--output", "./out", "--json"], {
+      client: createMockByrClient(),
+      stdout,
+      stderr,
+      fileWriter: async () => {
+        const error = new Error("EISDIR: illegal operation on a directory") as NodeJS.ErrnoException;
+        error.code = "EISDIR";
+        throw error;
+      },
+    });
+
+    expect(exitCode).toBe(2);
+    expect(JSON.parse(stdout.read())).toMatchObject({
+      ok: false,
+      error: {
+        code: "E_ARG_INVALID",
+        message: "--output must be a file path, not a directory",
+      },
+    });
+    expect(stderr.read()).toBe("");
+  });
 });
