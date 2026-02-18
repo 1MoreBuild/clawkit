@@ -1,3 +1,7 @@
+import { mkdtempSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { runCli } from "../src/cli.js";
@@ -121,5 +125,68 @@ describe("download --dry-run", () => {
         dryRun: false,
       },
     });
+  });
+
+  it("accepts output directory and auto-generates torrent file path", async () => {
+    const root = mkdtempSync(join(tmpdir(), "byr-cli-download-"));
+    const outputDir = join(root, "torrents");
+    mkdirSync(outputDir);
+
+    const writes: string[] = [];
+    const stdout = new BufferWriter();
+    const stderr = new BufferWriter();
+
+    const exitCode = await runCli(["download", "--id", "1001", "--output", outputDir, "--json"], {
+      client: createMockByrClient(),
+      stdout,
+      stderr,
+      fileWriter: async (path) => {
+        writes.push(path);
+      },
+      requestIdFactory: () => "req-output-dir",
+      clock: () => 1000,
+      now: () => new Date("2026-02-13T01:00:00.000Z"),
+    });
+
+    expect(exitCode).toBe(0);
+    expect(writes).toEqual([join(outputDir, "1001.torrent")]);
+    expect(JSON.parse(stdout.read())).toMatchObject({
+      ok: true,
+      data: {
+        outputPath: join(outputDir, "1001.torrent"),
+      },
+    });
+    expect(stderr.read()).toBe("");
+  });
+
+  it("accepts output directory during dry run and reports resolved file path", async () => {
+    const root = mkdtempSync(join(tmpdir(), "byr-cli-download-dry-"));
+    const outputDir = join(root, "torrents");
+    mkdirSync(outputDir);
+
+    const stdout = new BufferWriter();
+    const stderr = new BufferWriter();
+
+    const exitCode = await runCli(
+      ["download", "--id", "1001", "--output", outputDir, "--dry-run", "--json"],
+      {
+        client: createMockByrClient(),
+        stdout,
+        stderr,
+        requestIdFactory: () => "req-output-dir-dry",
+        clock: () => 1000,
+        now: () => new Date("2026-02-13T01:00:00.000Z"),
+      },
+    );
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(stdout.read())).toMatchObject({
+      ok: true,
+      data: {
+        dryRun: true,
+        outputPath: join(outputDir, "1001.torrent"),
+      },
+    });
+    expect(stderr.read()).toBe("");
   });
 });

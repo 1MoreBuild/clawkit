@@ -22,6 +22,7 @@ export BYR_COOKIE='uid=...; pass=...'
 byr search --query "ubuntu" --limit 5
 byr get --id 1001
 byr download --id 1001 --output ./1001.torrent --dry-run
+byr download --id 1001 --output ~/Downloads/torrents --json
 ```
 
 ## Commands
@@ -46,6 +47,8 @@ byr auth import-cookie --cookie "uid=...; pass=..." --json
 byr auth import-cookie --from-browser chrome --profile "Default" --json
 byr auth logout --json
 ```
+
+`download --output` accepts either a full file path or an existing directory path. If a directory is provided, the CLI auto-generates `<torrent-file-name>.torrent` inside that directory.
 
 ## Search filters
 

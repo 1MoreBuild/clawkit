@@ -1,4 +1,5 @@
-import { writeFile } from "node:fs/promises";
+import { stat, writeFile } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { createRequire } from "node:module";
 import { createInterface } from "node:readline/promises";
 
@@ -381,12 +382,29 @@ async function dispatchDownload(parsed: ParsedArgs, deps: DispatchDeps): Promise
     outputPath,
     dryRun,
     writeFile: deps.fileWriter,
+    resolveOutputPath: resolveDownloadOutputPath,
   });
 
   return {
     data: output,
     humanOutput: renderDownloadOutput(output),
   };
+}
+
+async function resolveDownloadOutputPath(path: string, fileName: string): Promise<string> {
+  try {
+    const fileStat = await stat(path);
+    if (fileStat.isDirectory()) {
+      return join(path, basename(fileName));
+    }
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError?.code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  return path;
 }
 
 async function dispatchUser(parsed: ParsedArgs, deps: DispatchDeps): Promise<DispatchResult> {
@@ -951,7 +969,9 @@ function renderHelp(command?: string, subcommand?: string): string {
       "byr download",
       "",
       "Usage:",
-      "  byr download --id <torrent-id> --output <path> [--dry-run] [--json]",
+      "  byr download --id <torrent-id> --output <path|directory> [--dry-run] [--json]",
+      "Notes:",
+      "  If --output is a directory, file name is auto-derived from the torrent metadata.",
     ].join("\n");
   }
 
@@ -1047,7 +1067,7 @@ function renderHelp(command?: string, subcommand?: string): string {
     "  byr search --query <text> [--limit <n, default 50>] [--category <alias|id>] [--incldead <alias|id>] [--spstate <alias|id>] [--bookmarked <alias|id>] [--page <n>] [--json]",
     "  byr search --imdb <tt-id> [--limit <n, default 50>] [--json]",
     "  byr get --id <torrent-id> [--json]",
-    "  byr download --id <torrent-id> --output <path> [--dry-run] [--json]",
+    "  byr download --id <torrent-id> --output <path|directory> [--dry-run] [--json]",
     "  byr doctor [--verify] [--json]",
     "  byr user info [--json]",
     "  byr meta categories [--json]",
