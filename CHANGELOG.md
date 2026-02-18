@@ -10,6 +10,18 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 - (no unreleased entries yet)
 
+## [0.1.11] - 2026-02-18
+
+### Added
+
+- Added list metadata parsing from BYR pagination range blocks, exposing `matchedTotal` for `search` and `browse` JSON responses.
+- Added `returned` field for `search` and `browse` outputs (count of items actually returned).
+
+### Changed
+
+- Human output now shows both `Matched` (estimated total hits) and `Returned` (current payload size) when total can be inferred.
+- Kept backward compatibility: existing `total` field remains the returned item count.
+
 ## [0.1.10] - 2026-02-18
 
 ### Fixed

@@ -42,6 +42,12 @@ import type {
 export interface ByrClient {
   browse(limit: number, options?: ByrBrowseOptions): Promise<ByrSearchItem[]>;
   search(query: string, limit: number, options?: ByrSearchOptions): Promise<ByrSearchItem[]>;
+  browseWithMeta?: (limit: number, options?: ByrBrowseOptions) => Promise<ByrTorrentListResult>;
+  searchWithMeta?: (
+    query: string,
+    limit: number,
+    options?: ByrSearchOptions,
+  ) => Promise<ByrTorrentListResult>;
   getById(id: string): Promise<ByrTorrentDetail>;
   getDownloadPlan(id: string): Promise<ByrDownloadPlan>;
   downloadTorrent(id: string): Promise<ByrTorrentPayload>;
@@ -68,6 +74,11 @@ export interface ByrClientOptions {
 const DEFAULT_BASE_URL = "https://byr.pt";
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_AUTO_TORRENT_LIST_PAGES = 30;
+
+export interface ByrTorrentListResult {
+  items: ByrSearchItem[];
+  matchedTotal?: number;
+}
 
 export function createByrClientFromEnv(env: NodeJS.ProcessEnv = process.env): ByrClient {
   return createByrClient({
@@ -240,7 +251,7 @@ export function createByrClient(options: ByrClientOptions = {}): ByrClient {
     query?: string;
     limit: number;
     options: ByrSearchOptions | ByrBrowseOptions;
-  }): Promise<ByrSearchItem[]> {
+  }): Promise<ByrTorrentListResult> {
     const explicitPage = input.options.page;
 
     if (explicitPage !== undefined) {
@@ -249,11 +260,15 @@ export function createByrClient(options: ByrClientOptions = {}): ByrClient {
         options: input.options,
       });
       const html = await fetchAuthenticatedHtml(`/torrents.php?${params.toString()}`);
-      return parseSearchItems(html, input.limit, baseUrl);
+      return {
+        items: parseSearchItems(html, input.limit, baseUrl),
+        matchedTotal: parseMatchedTotalFromPager(html),
+      };
     }
 
     const items: ByrSearchItem[] = [];
     const seenIds = new Set<string>();
+    let matchedTotal: number | undefined;
 
     for (
       let pageIndex = 0;
@@ -269,6 +284,9 @@ export function createByrClient(options: ByrClientOptions = {}): ByrClient {
         options: pagedOptions,
       });
       const html = await fetchAuthenticatedHtml(`/torrents.php?${params.toString()}`);
+      if (pageIndex === 0) {
+        matchedTotal = parseMatchedTotalFromPager(html);
+      }
       const pageItems = parseSearchItems(html, Number.MAX_SAFE_INTEGER, baseUrl);
 
       if (pageItems.length === 0) {
@@ -298,11 +316,22 @@ export function createByrClient(options: ByrClientOptions = {}): ByrClient {
       }
     }
 
-    return items.slice(0, input.limit);
+    return {
+      items: items.slice(0, input.limit),
+      matchedTotal,
+    };
   }
 
   return {
     async browse(limit: number, options: ByrBrowseOptions = {}): Promise<ByrSearchItem[]> {
+      const result = await fetchTorrentList({
+        limit,
+        options,
+      });
+      return result.items;
+    },
+
+    async browseWithMeta(limit: number, options: ByrBrowseOptions = {}): Promise<ByrTorrentListResult> {
       return fetchTorrentList({
         limit,
         options,
@@ -314,6 +343,19 @@ export function createByrClient(options: ByrClientOptions = {}): ByrClient {
       limit: number,
       options: ByrSearchOptions = {},
     ): Promise<ByrSearchItem[]> {
+      const result = await fetchTorrentList({
+        limit,
+        query,
+        options,
+      });
+      return result.items;
+    },
+
+    async searchWithMeta(
+      query: string,
+      limit: number,
+      options: ByrSearchOptions = {},
+    ): Promise<ByrTorrentListResult> {
       return fetchTorrentList({
         limit,
         query,
@@ -620,6 +662,25 @@ function hasPageLink(html: string, page: number): boolean {
   const normalized = html.replaceAll("&amp;", "&");
   const pattern = new RegExp(`[?&]page=${page}(?:[&#"'\\s>]|$)`, "i");
   return pattern.test(normalized);
+}
+
+function parseMatchedTotalFromPager(html: string): number | undefined {
+  const ranges = Array.from(
+    html.matchAll(/<b[^>]*>\s*(\d+)\s*(?:&nbsp;|\s)+-\s*(?:&nbsp;|\s)+(\d+)\s*<\/b>/gi),
+  );
+  if (ranges.length === 0) {
+    return undefined;
+  }
+
+  let maxUpper = 0;
+  for (const match of ranges) {
+    const upper = Number.parseInt(match[2] ?? "", 10);
+    if (Number.isFinite(upper) && upper > maxUpper) {
+      maxUpper = upper;
+    }
+  }
+
+  return maxUpper > 0 ? maxUpper : undefined;
 }
 
 function looksLikeAuthPage(response: Response, html: string): boolean {

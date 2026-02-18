@@ -213,8 +213,8 @@ describe("real BYR upstream client", () => {
 
       const pager =
         nextPage === undefined
-          ? ""
-          : `<div class="pagenum"><a href="torrents.php?page=${nextPage}">next</a></div>`;
+          ? `<p style="text-align:center"><span class="gray"><b>3&nbsp;-&nbsp;3</b></span></p>`
+          : `<p style="text-align:center"><span class="gray"><b>1&nbsp;-&nbsp;2</b></span> | <a href="torrents.php?page=${nextPage}"><b>3&nbsp;-&nbsp;3</b></a></p>`;
 
       return `
         <html>
@@ -259,8 +259,9 @@ describe("real BYR upstream client", () => {
       cookie: "uid=abc; pass=def",
     });
 
-    const items = await client.search("item", 3);
-    expect(items.map((item) => item.id)).toEqual(["1001", "1002", "1003"]);
+    const result = await client.searchWithMeta?.("item", 3);
+    expect(result?.items.map((item) => item.id)).toEqual(["1001", "1002", "1003"]);
+    expect(result?.matchedTotal).toBe(3);
     expect(calls).toHaveLength(2);
     expect(calls[0]?.url.searchParams.get("page")).toBeNull();
     expect(calls[1]?.url.searchParams.get("page")).toBe("1");

@@ -13,6 +13,8 @@ export interface SearchCommandOutput {
   query: string;
   imdb?: string;
   filters?: ByrSearchOptions;
+  matchedTotal?: number;
+  returned: number;
   total: number;
   items: Awaited<ReturnType<ByrClient["search"]>>;
 }
@@ -40,20 +42,32 @@ export async function runSearchCommand(
     });
   }
 
-  const items = await client.search(input.query, input.limit, input.options);
+  const result = client.searchWithMeta
+    ? await client.searchWithMeta(input.query, input.limit, input.options)
+    : {
+        items: await client.search(input.query, input.limit, input.options),
+      };
+  const items = result.items;
+  const returned = items.length;
 
   return {
     query: input.query,
     imdb: imdb && imdb.length > 0 ? imdb : undefined,
     filters: input.options,
-    total: items.length,
+    matchedTotal: result.matchedTotal,
+    returned,
+    total: returned,
     items,
   };
 }
 
 export function renderSearchOutput(output: SearchCommandOutput): string {
   const searchText = output.imdb ? `imdb:${output.imdb}` : output.query;
-  const lines: string[] = [`Search: ${searchText}`, `Returned: ${output.total}`];
+  const lines: string[] = [`Search: ${searchText}`];
+  if (typeof output.matchedTotal === "number") {
+    lines.push(`Matched: ${output.matchedTotal}`);
+  }
+  lines.push(`Returned: ${output.returned}`);
 
   for (const item of output.items) {
     lines.push(
