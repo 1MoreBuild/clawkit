@@ -123,7 +123,10 @@ export class UpstreamClient {
         throw classified;
       } catch (error) {
         const mapped = mapFetchError(error, this.providerId, url, this.timeoutMs);
-        if (attempt < maxAttempts && (mapped.code === "E_UPSTREAM_NETWORK" || mapped.code === "E_UPSTREAM_TIMEOUT")) {
+        if (
+          attempt < maxAttempts &&
+          (mapped.code === "E_UPSTREAM_NETWORK" || mapped.code === "E_UPSTREAM_TIMEOUT")
+        ) {
           await this.sleep(computeBackoff(this.backoffMs, this.maxBackoffMs, attempt));
           continue;
         }

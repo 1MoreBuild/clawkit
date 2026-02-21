@@ -333,7 +333,10 @@ function selectFileName(fileStem: string, sourceUrl: string, format: SubtitleFor
     }
   })();
 
-  const baseName = pathname.split("/").filter((segment) => segment.length > 0).at(-1);
+  const baseName = pathname
+    .split("/")
+    .filter((segment) => segment.length > 0)
+    .at(-1);
   if (baseName !== undefined && baseName.length > 0) {
     return decodeURIComponent(baseName);
   }

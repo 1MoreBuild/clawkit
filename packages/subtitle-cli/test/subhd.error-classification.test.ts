@@ -4,7 +4,9 @@ import { createSubhdProvider } from "../src/domain/providers/subhd.js";
 
 type FetchImpl = typeof fetch;
 
-function createRequestStub(responseFactory: (request: Request) => Response | Promise<Response>): FetchImpl {
+function createRequestStub(
+  responseFactory: (request: Request) => Response | Promise<Response>,
+): FetchImpl {
   const fetchImpl: FetchImpl = async (input, init) => {
     const request = new Request(input, init);
     return responseFactory(request);
@@ -44,7 +46,7 @@ describe("SubHD upstream error classification", () => {
       retries: 0,
       fetchImpl: createRequestStub(
         () =>
-          new Response('<html><body>Cloudflare challenge-platform captcha</body></html>', {
+          new Response("<html><body>Cloudflare challenge-platform captcha</body></html>", {
             status: 403,
           }),
       ),

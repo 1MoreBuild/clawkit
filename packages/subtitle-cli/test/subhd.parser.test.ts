@@ -3,7 +3,10 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { parseSubhdDownloadPage, parseSubhdSearchItems } from "../src/domain/providers/subhd-parser.js";
+import {
+  parseSubhdDownloadPage,
+  parseSubhdSearchItems,
+} from "../src/domain/providers/subhd-parser.js";
 
 const FIXTURE_DIR = join(import.meta.dirname, "fixtures", "subhd");
 

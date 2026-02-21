@@ -51,15 +51,7 @@ describe("CLI argument validation", () => {
     const stderr = new BufferWriter();
 
     const exitCode = await runCli(
-      [
-        "fetch",
-        "--query",
-        "this should never match",
-        "--output",
-        "./x.srt",
-        "--provider",
-        "assrt",
-      ],
+      ["fetch", "--query", "this should never match", "--output", "./x.srt", "--provider", "assrt"],
       {
         stdout,
         stderr,

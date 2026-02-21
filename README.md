@@ -65,6 +65,9 @@ which -a byr
 ## Common Commands
 
 ```bash
+# Auto-fix formatting (run before commit if needed)
+pnpm fmt
+
 # Full repo quality gate
 pnpm check
 
@@ -79,6 +82,8 @@ BYR_LIVE=1 BYR_COOKIE='uid=...; pass=...' pnpm --filter byr-pt-cli test:live
 # Refresh detect-secrets baseline after intentional test-fixture changes
 ./scripts/refresh-secrets-baseline.sh
 ```
+
+`pnpm install` installs a `pre-commit` hook (via `simple-git-hooks`) that runs `pnpm format:check` so formatting issues are caught before they reach CI.
 
 ## Repository Layout
 
