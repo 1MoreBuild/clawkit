@@ -1,0 +1,31 @@
+{
+  "name": "subtitle-cli",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Subtitle CLI with OpenClaw-friendly JSON contract",
+  "license": "MIT",
+  "bin": {
+    "sub": "dist/index.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/cli.mjs",
+  "types": "dist/cli.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/cli.d.mts",
+      "import": "./dist/cli.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsdown src/index.ts src/cli.ts src/domain/types.ts src/domain/providers.ts src/domain/request-normalization.ts src/domain/ranking.ts src/commands/search.ts src/commands/download.ts src/commands/fetch.ts src/commands/doctor.ts src/commands/providers.ts --format esm --dts",
+    "test": "pnpm --filter clawkit-cli-core build && vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "check": "pnpm typecheck && pnpm test"
+  },
+  "dependencies": {
+    "clawkit-cli-core": "workspace:^"
+  }
+}

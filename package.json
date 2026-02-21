@@ -10,9 +10,13 @@
     "test": "pnpm -r test",
     "lint": "oxlint",
     "format": "oxfmt --write",
+    "fmt": "pnpm format",
     "format:check": "oxfmt --check",
+    "fmt:check": "pnpm format:check",
     "check": "pnpm format:check && pnpm lint && pnpm -r check",
+    "prepare": "simple-git-hooks",
     "byr:dev": "bash ./scripts/byr-dev.sh",
+    "sub:dev": "bash ./scripts/sub-dev.sh",
     "byr:smoke-install": "bash ./scripts/smoke-install-byr.sh",
     "publish:package": "echo 'Usage: pnpm --filter <package-name> publish --access public'",
     "publish:skill": "echo 'Usage: pnpm --filter <package-name> skill:publish'",
@@ -22,10 +26,14 @@
     "@types/node": "^24.3.0",
     "oxfmt": "0.32.0",
     "oxlint": "^1.47.0",
+    "simple-git-hooks": "^2.13.1",
     "tsdown": "^0.20.3",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm format:check"
   },
   "engines": {
     "node": ">=22.12.0"
