@@ -38,6 +38,12 @@ importers:
 
   packages/cli-core: {}
 
+  packages/subtitle-cli:
+    dependencies:
+      clawkit-cli-core:
+        specifier: workspace:^
+        version: link:../cli-core
+
 packages:
 
   '@babel/generator@8.0.0-rc.1':

@@ -5,6 +5,7 @@
 ## Packages
 
 - `byr-pt-cli`: CLI for `byr.pt` (`byr browse/search/get/download/auth/user/meta/check/doctor/whoami`)
+- `subtitle-cli`: subtitle CLI (`sub search/fetch/download/doctor/providers`) with SubHD-first provider priority + ASSRT fallback mock
 - `clawkit-cli-core`: shared envelope/errors/exit-code contracts
 
 ## Requirements
@@ -20,10 +21,11 @@ pnpm check
 pnpm build
 ```
 
-Run BYR CLI locally from the workspace:
+Run CLIs locally from the workspace:
 
 ```bash
 pnpm byr:dev -- help
+pnpm sub:dev -- help
 ```
 
 Install published CLI globally (macOS recommended):
@@ -69,6 +71,7 @@ pnpm check
 # Package-only checks
 pnpm --filter clawkit-cli-core check
 pnpm --filter byr-pt-cli check
+pnpm --filter subtitle-cli check
 
 # BYR live smoke (local only, requires valid credentials)
 BYR_LIVE=1 BYR_COOKIE='uid=...; pass=...' pnpm --filter byr-pt-cli test:live
