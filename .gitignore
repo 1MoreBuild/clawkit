@@ -5,3 +5,12 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Python/STT
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+stt/.venv/
