@@ -1,32 +1,32 @@
 # MLX Whisper Hot Service (Apple Silicon)
 
-本目录提供一个本地常驻语音转写（STT）服务（基于 `mlx-whisper`），面向 Apple Silicon。服务启动时会预加载并预热模型，以降低首请求冷启动延迟。
+This directory provides a local always-on speech-to-text (STT) service based on `mlx-whisper`, intended for Apple Silicon. The service preloads and warms up the model at startup to reduce first-request cold-start latency.
 
-## 当前行为（与代码一致）
+## Current behavior (matches code)
 
-- 默认模型：`mlx-community/whisper-small-mlx`
-- 启动后自动 warmup（默认静音 0.6 秒）
-- `POST /transcribe` 默认 `language=auto`（自动识别）
-- 支持 `language=auto|zh|en`
-- 服务名：`mlx-whisper-hot-service`
+- Default model: `mlx-community/whisper-small-mlx`
+- Automatic warmup after startup (default 0.6s silence)
+- `POST /transcribe` defaults to `language=auto` (auto detect)
+- Supported language values: `auto|zh|en`
+- Service name: `mlx-whisper-hot-service`
 
-## 目录
+## Files
 
-- `mlx_hot_service.py`：FastAPI 服务实现
-- `run.sh`：创建/修复虚拟环境、安装依赖并启动服务
-- `benchmark_latency.py`：最小本地延迟基准脚本（2~10 秒音频）
-- `requirements.txt`：Python 依赖
+- `mlx_hot_service.py`: FastAPI service implementation
+- `run.sh`: create/repair virtualenv, install dependencies, and start the service
+- `benchmark_latency.py`: minimal local latency benchmark script (2-10 second audio)
+- `requirements.txt`: Python dependencies
 
-## 启动方式
+## Start
 
-### 一键启动（推荐）
+### One-command start (recommended)
 
 ```bash
 cd clawkit/stt
 ./run.sh
 ```
 
-### 手动启动
+### Manual start
 
 ```bash
 cd clawkit/stt
@@ -37,36 +37,36 @@ python -m pip install -r requirements.txt
 python mlx_hot_service.py
 ```
 
-可选环境变量：
+Optional environment variables:
 
-- `MLX_WHISPER_MODEL`（默认：`mlx-community/whisper-small-mlx`）
-- `HOST`（默认：`127.0.0.1`）
-- `PORT`（默认：`8099`）
-- `WARMUP_SECONDS`（默认：`0.6`）
-- `INITIAL_PROMPT`（术语纠错提示，已内置 OpenClaw/CLI/subagent 等）
+- `MLX_WHISPER_MODEL` (default: `mlx-community/whisper-small-mlx`)
+- `HOST` (default: `127.0.0.1`)
+- `PORT` (default: `8099`)
+- `WARMUP_SECONDS` (default: `0.6`)
+- `INITIAL_PROMPT` (term-correction hints; includes OpenClaw/CLI/subagent, etc.)
 
-示例（切换模型）：
+Example (switch model):
 
 ```bash
 MLX_WHISPER_MODEL=mlx-community/whisper-medium-mlx ./run.sh
 ```
 
-## API 调用示例
+## API examples
 
-### 健康检查
+### Health check
 
 ```bash
 curl http://127.0.0.1:8099/health
 ```
 
-### 转写（自动语言识别，默认）
+### Transcribe (auto language detect, default)
 
 ```bash
 curl -X POST "http://127.0.0.1:8099/transcribe" \
   -F "file=@/path/to/sample.wav"
 ```
 
-### 转写（指定中文）
+### Transcribe (force Chinese)
 
 ```bash
 curl -X POST "http://127.0.0.1:8099/transcribe" \
@@ -74,7 +74,7 @@ curl -X POST "http://127.0.0.1:8099/transcribe" \
   -F "language=zh"
 ```
 
-### 转写（指定英文）
+### Transcribe (force English)
 
 ```bash
 curl -X POST "http://127.0.0.1:8099/transcribe" \
@@ -82,15 +82,15 @@ curl -X POST "http://127.0.0.1:8099/transcribe" \
   -F "language=en"
 ```
 
-## 最小自检
+## Minimal self-check
 
-服务启动后执行：
+After service startup:
 
 ```bash
 # 1) health
 curl http://127.0.0.1:8099/health
 
-# 2) 生成一个 1 秒静音 wav 并发起 transcribe
+# 2) generate a 1-second silent wav and call transcribe
 python3 - <<'PY'
 import wave
 with wave.open('/tmp/stt_silence.wav', 'wb') as wf:
@@ -106,18 +106,18 @@ curl -X POST "http://127.0.0.1:8099/transcribe" \
   -F "language=auto"
 ```
 
-## 已知限制
+## Known limitations
 
-- 首次下载模型时会较慢（依赖网络与 Hugging Face 可达性）
-- 当前接口仅支持 `auto|zh|en` 三种语言参数
-- 对超长音频未做分片与流式处理，建议调用方自行切片
-- 术语纠错基于 `initial_prompt` 与简单文本替换，不能保证 100% 命中
+- First-time model download can be slow (network + Hugging Face reachability)
+- Current API supports only `auto|zh|en`
+- No chunking/streaming for very long audio; callers should segment audio as needed
+- Term correction relies on `initial_prompt` and simple text replacement; 100% accuracy is not guaranteed
 
-## 排障
+## Troubleshooting
 
-### 1) `python: command not found`（常见于 venv 损坏）
+### 1) `python: command not found` (commonly caused by a broken venv)
 
-`run.sh` 已内置自动修复：若激活后找不到 `python`，会删除并重建 `.venv`。手动处理命令如下：
+`run.sh` includes auto-repair: if `python` is missing after activation, it recreates `.venv`. Manual steps:
 
 ```bash
 cd clawkit/stt
@@ -129,20 +129,20 @@ python -m pip install -r requirements.txt
 ./run.sh
 ```
 
-### 2) 端口被占用
+### 2) Port already in use
 
-修改端口重新启动：
+Restart with a different port:
 
 ```bash
 PORT=8100 ./run.sh
 ```
 
-### 3) 模型下载失败或超时
+### 3) Model download fails or times out
 
-- 检查网络与代理设置
-- 重试启动命令
-- 或先切换到体积更小模型验证链路
+- Check network/proxy settings
+- Retry startup command
+- Or test with a smaller model first
 
-### 4) 请求报 400：`language must be one of: auto|zh|en`
+### 4) Request returns 400: `language must be one of: auto|zh|en`
 
-请确认 `language` 参数仅为：`auto`、`zh`、`en`。
+Ensure `language` is exactly one of: `auto`, `zh`, or `en`.

@@ -16,7 +16,7 @@ DEFAULT_MODEL = os.getenv("MLX_WHISPER_MODEL", "mlx-community/whisper-small-mlx"
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "8099"))
 WARMUP_SECONDS = float(os.getenv("WARMUP_SECONDS", "0.6"))
-INITIAL_PROMPT = os.getenv("INITIAL_PROMPT", "术语: subagent, codex, claude, cli, fallback, OpenClaw")
+INITIAL_PROMPT = os.getenv("INITIAL_PROMPT", "Terms: subagent, codex, claude, cli, fallback, OpenClaw")
 
 app = FastAPI(title="mlx-whisper-hot-service", version="0.1.0")
 
