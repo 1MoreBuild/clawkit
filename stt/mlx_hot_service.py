@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import tempfile
 import time
 import wave
@@ -46,16 +47,22 @@ class HotWhisperService:
 
     @staticmethod
     def _normalize_terms(text: str) -> str:
-        fixes = {
-            "SubsiderAgent": "subagent",
-            "Subsider Agent": "subagent",
-            "CLA": "CLI",
-            "Fallback": "fallback",
-            "Open claw": "OpenClaw",
-        }
+        def _case_aware_cli(match: re.Match[str]) -> str:
+            token = match.group(0)
+            if token.isupper():
+                return "CLI"
+            if token.islower():
+                return "cli"
+            if token[0].isupper() and token[1:].islower():
+                return "Cli"
+            return "CLI"
+
         out = text
-        for wrong, right in fixes.items():
-            out = out.replace(wrong, right)
+        out = re.sub(r"\bSubsiderAgent\b", "subagent", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bSubsider\s+Agent\b", "subagent", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bCLA\b", _case_aware_cli, out, flags=re.IGNORECASE)
+        out = re.sub(r"\bFallback\b", "fallback", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bOpen\s+claw\b", "OpenClaw", out, flags=re.IGNORECASE)
         return out
 
     def warmup(self) -> None:
