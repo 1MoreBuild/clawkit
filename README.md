@@ -1,5 +1,16 @@
 # clawkit
 
+## Repository Split Notice (2026-02-23)
+
+This repository has been split into standalone repositories and is now read-only for migration reference:
+
+- `packages/byr-cli` -> https://github.com/1MoreBuild/byr-cli
+- `packages/agent-search` -> https://github.com/1MoreBuild/agent-search-cli
+- `packages/subtitle-cli` -> https://github.com/1MoreBuild/subtitle-cli
+- `stt` -> https://github.com/1MoreBuild/local-whisper-service
+
+`clawkit` no longer accepts feature development. Ongoing changes and releases happen in the new repositories above.
+
 `clawkit` is a pnpm monorepo for standalone CLI tools and shared CLI contracts.
 
 ## Packages
