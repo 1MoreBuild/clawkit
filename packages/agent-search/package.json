@@ -1,0 +1,34 @@
+{
+  "name": "agent-search-cli",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Agentic web search CLI with pluggable LLM engines (Claude/Codex)",
+  "license": "MIT",
+  "bin": {
+    "agent-search": "dist/index.mjs"
+  },
+  "files": [
+    "dist",
+    "skill-openclaw"
+  ],
+  "type": "module",
+  "main": "dist/cli.mjs",
+  "types": "dist/cli.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/cli.d.mts",
+      "import": "./dist/cli.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsdown src/index.ts src/cli.ts --format esm --dts",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "check": "pnpm typecheck && pnpm test",
+    "skill:publish": "node ./scripts/skill-publish.mjs",
+    "skill:sync": "clawhub sync --root ./skill-openclaw --all"
+  },
+  "dependencies": {
+    "clawkit-cli-core": "^0.1.0"
+  }
+}

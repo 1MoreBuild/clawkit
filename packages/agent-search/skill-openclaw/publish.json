@@ -1,0 +1,7 @@
+{
+  "slug": "agent-search",
+  "name": "Agent Search",
+  "version": "0.1.0",
+  "tags": ["search", "agentic", "cli", "openclaw"],
+  "changelog": "Initial release: Claude/Codex engine selection, default engine config, JSON envelopes."
+}
