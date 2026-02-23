@@ -4,6 +4,21 @@ Agentic web search CLI with pluggable engines (Claude/Codex).
 
 ## Install
 
+### Homebrew (recommended)
+
+```bash
+brew tap 1MoreBuild/tap
+brew install agent-search-cli
+```
+
+### npm
+
+```bash
+npm i -g agent-search-cli
+```
+
+### Local dev
+
 ```bash
 pnpm --filter agent-search-cli build
 pnpm --filter agent-search-cli exec node dist/index.mjs help
