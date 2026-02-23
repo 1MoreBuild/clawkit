@@ -1,6 +1,33 @@
 ---
 name: agent-search
 description: Use Agent Search CLI to run agentic web search with selectable engines (claude/codex), configurable default engine, and JSON envelopes.
+metadata:
+  {
+    "openclaw":
+      {
+        "skillKey": "agent-search",
+        "homepage": "https://clawhub.ai",
+        "requires": { "bins": ["agent-search"] },
+        "install":
+          [
+            {
+              "id": "brew",
+              "kind": "brew",
+              "formula": "agent-search-cli",
+              "tap": "1MoreBuild/tap",
+              "bins": ["agent-search"],
+              "label": "Install agent-search CLI (Homebrew)",
+            },
+            {
+              "id": "node",
+              "kind": "node",
+              "package": "agent-search-cli",
+              "bins": ["agent-search"],
+              "label": "Install agent-search CLI (npm fallback)",
+            },
+          ],
+      },
+  }
 ---
 
 # Agent Search Skill
