@@ -33,6 +33,12 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.13)(tsx@4.21.0)
 
+  packages/agent-search:
+    dependencies:
+      clawkit-cli-core:
+        specifier: ^0.1.0
+        version: 0.1.0
+
   packages/byr-cli:
     dependencies:
       clawkit-cli-core:
